@@ -60,7 +60,7 @@ class DatabaseService {
     const { uid, name, whatsapp_number, is_active = 1 } = data;
     const stmt = this.db.prepare(`
       INSERT INTO users (uid, name, whatsapp_number, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
     `);
     
     try {
@@ -96,7 +96,7 @@ class DatabaseService {
       throw new Error('No fields to update');
     }
     
-    fields.push(`updated_at = datetime('now')`);
+    fields.push(`updated_at = datetime('now', '+7 hours')`);
     values.push(uid);
     
     const stmt = this.db.prepare(`
@@ -145,7 +145,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO attendance 
       (transaction_id, user_id, user_name, whatsapp_number, attendance_time, mode, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
     `);
     
     try {
@@ -291,7 +291,7 @@ class DatabaseService {
   markAsSent(transactionId) {
     const stmt = this.db.prepare(`
       UPDATE attendance 
-      SET status = 'sent', sent_at = datetime('now') 
+      SET status = 'sent', sent_at = datetime('now', '+7 hours') 
       WHERE transaction_id = ?
     `);
     
@@ -325,7 +325,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO retry_queue 
       (whatsapp_number, message, transaction_id, max_attempts, next_retry_at, created_at)
-      VALUES (?, ?, ?, ?, datetime('now', '+1 minutes'), datetime('now'))
+      VALUES (?, ?, ?, ?, datetime('now', '+7 hours', '+1 minutes'), datetime('now', '+7 hours'))
     `);
     
     const result = stmt.run(whatsapp_number, message, transaction_id, max_attempts);
@@ -336,7 +336,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       SELECT * FROM retry_queue 
       WHERE status = 'pending' 
-      AND next_retry_at <= datetime('now')
+      AND next_retry_at <= datetime('now', '+7 hours')
       AND attempt < max_attempts
       ORDER BY created_at ASC
       LIMIT 100
@@ -350,8 +350,8 @@ class DatabaseService {
       UPDATE retry_queue 
       SET 
         attempt = attempt + 1,
-        next_retry_at = datetime('now', '+' || ? || ' seconds'),
-        updated_at = datetime('now')
+        next_retry_at = datetime('now', '+7 hours', '+' || ? || ' seconds'),
+        updated_at = datetime('now', '+7 hours')
       WHERE id = ?
     `);
     
@@ -362,7 +362,7 @@ class DatabaseService {
   markRetryAsSent(id) {
     const stmt = this.db.prepare(`
       UPDATE retry_queue 
-      SET status = 'sent', updated_at = datetime('now')
+      SET status = 'sent', updated_at = datetime('now', '+7 hours')
       WHERE id = ?
     `);
     
@@ -373,7 +373,7 @@ class DatabaseService {
   markRetryAsFailed(id) {
     const stmt = this.db.prepare(`
       UPDATE retry_queue 
-      SET status = 'failed', updated_at = datetime('now')
+      SET status = 'failed', updated_at = datetime('now', '+7 hours')
       WHERE id = ?
     `);
     
@@ -397,7 +397,7 @@ class DatabaseService {
     
     const stmt = this.db.prepare(`
       INSERT INTO templates (name, content, variables, created_at, updated_at)
-      VALUES (?, ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
     `);
     
     try {
@@ -437,7 +437,7 @@ class DatabaseService {
       throw new Error('No fields to update');
     }
     
-    fields.push(`updated_at = datetime('now')`);
+    fields.push(`updated_at = datetime('now', '+7 hours')`);
     values.push(id);
     
     const stmt = this.db.prepare(`
@@ -476,7 +476,7 @@ class DatabaseService {
   setSetting(key, value) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES (?, ?, datetime('now'))
+      VALUES (?, ?, datetime('now', '+7 hours'))
     `);
     
     const result = stmt.run(key, value);
@@ -487,7 +487,7 @@ class DatabaseService {
   logDeviceStatus(ip, status, message = null) {
     const stmt = this.db.prepare(`
       INSERT INTO device_logs (device_ip, status, message, created_at)
-      VALUES (?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, datetime('now', '+7 hours'))
     `);
     
     const result = stmt.run(ip, status, message);
@@ -547,7 +547,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO polling_schedules 
       (day_of_week, days, start_time, end_time, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
     `);
     
     const result = stmt.run(
@@ -588,7 +588,7 @@ class DatabaseService {
       throw new Error('No fields to update');
     }
     
-    fields.push(`updated_at = datetime('now')`);
+    fields.push(`updated_at = datetime('now', '+7 hours')`);
     values.push(id);
     
     const stmt = this.db.prepare(`

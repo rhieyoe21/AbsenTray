@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     whatsapp_number TEXT NOT NULL,
     is_active BOOLEAN DEFAULT 1 CHECK (is_active IN (0, 1)),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+    updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
 
 -- Attendance table
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'retrying')),
     sent_at DATETIME,
     error_message TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
     FOREIGN KEY (user_id) REFERENCES users(uid) ON DELETE RESTRICT
 );
 
@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS retry_queue (
     max_attempts INTEGER DEFAULT 3,
     next_retry_at DATETIME,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed')),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+    updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
 
 -- Message templates
@@ -52,15 +52,15 @@ CREATE TABLE IF NOT EXISTS templates (
     content TEXT NOT NULL,
     variables TEXT,
     is_active BOOLEAN DEFAULT 1 CHECK (is_active IN (0, 1)),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+    updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
 
 -- System settings
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
 
 -- Device status log
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS device_logs (
     device_ip TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('online', 'offline', 'error', 'connecting')),
     message TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
 
 -- Polling schedules (multi-schedule: which hours on which days to poll)
@@ -82,8 +82,8 @@ CREATE TABLE IF NOT EXISTS polling_schedules (
     start_time TEXT NOT NULL CHECK (length(start_time) = 5),
     end_time TEXT NOT NULL CHECK (length(end_time) = 5),
     is_active BOOLEAN DEFAULT 1 CHECK (is_active IN (0, 1)),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+    updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
 
 -- Indexes for performance
@@ -133,23 +133,23 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
 CREATE TRIGGER IF NOT EXISTS update_users_timestamp 
 AFTER UPDATE ON users
 BEGIN
-    UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    UPDATE users SET updated_at = datetime('now', '+7 hours') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS update_retry_queue_timestamp 
 AFTER UPDATE ON retry_queue
 BEGIN
-    UPDATE retry_queue SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    UPDATE retry_queue SET updated_at = datetime('now', '+7 hours') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS update_templates_timestamp 
 AFTER UPDATE ON templates
 BEGIN
-    UPDATE templates SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    UPDATE templates SET updated_at = datetime('now', '+7 hours') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS update_schedules_timestamp 
 AFTER UPDATE ON polling_schedules
 BEGIN
-    UPDATE polling_schedules SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    UPDATE polling_schedules SET updated_at = datetime('now', '+7 hours') WHERE id = NEW.id;
 END;
