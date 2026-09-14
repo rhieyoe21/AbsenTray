@@ -32,6 +32,17 @@ module.exports = (err, req, res, next) => {
   } else if (err.code === 'ETIMEDOUT') {
     status = 408;
     message = 'Request timeout';
+  } else if (err.code === 'EADDRINUSE') {
+    status = 500;
+    message = 'Port sudah dipakai service lain';
+  }
+
+  // Message-based inference for domain errors (no explicit code)
+  if (status === 500) {
+    if (/already exists|sudah ada|duplicate|unik/i.test(message)) status = 409;
+    else if (/not found|tidak ditemukan/i.test(message)) status = 404;
+    else if (/required|wajib diisi|harus|invalid|tidak valid/i.test(message)) status = 400;
+    else if (/terkunci|locked/i.test(message)) status = 423;
   }
 
   // Send error response
