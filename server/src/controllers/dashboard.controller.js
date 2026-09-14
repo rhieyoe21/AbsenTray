@@ -61,28 +61,26 @@ class DashboardController {
       const stats = database.getAttendanceStats(date);
       
       // Format for Chart.js
-      // Binning per 10 menit, dipisah mode Masuk/Pulang (full day 00:00-23:50).
-      const buckets = [];
-      const masuk = [];
-      const pulang = [];
-      for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 10) {
-          const key = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-          buckets.push(key);
-          masuk.push(0);
-          pulang.push(0);
-        }
-      }
+      // Binning per 10 menit, dipisah mode Masuk/Pulang.
+      // Hanya bucket yang benar-benar ada absensinya yang ditampilkan —
+      // chart lebih padat & hanya memperlihatkan jam kerja nyata.
+      const bucketMap = new Map(); // bucket -> { masuk, pulang }
       (stats.tenMinutes || []).forEach((row) => {
-        const idx = buckets.indexOf(row.bucket);
-        if (idx === -1) return;
-        if (row.mode === 'Masuk') masuk[idx] = row.count;
-        else if (row.mode === 'Pulang') pulang[idx] = row.count;
+        if (!bucketMap.has(row.bucket)) {
+          bucketMap.set(row.bucket, { masuk: 0, pulang: 0 });
+        }
+        const entry = bucketMap.get(row.bucket);
+        if (row.mode === 'Masuk') entry.masuk = row.count;
+        else if (row.mode === 'Pulang') entry.pulang = row.count;
       });
+      const sorted = [...bucketMap.keys()].sort();
+      const labels = sorted;
+      const masuk = sorted.map((k) => bucketMap.get(k).masuk);
+      const pulang = sorted.map((k) => bucketMap.get(k).pulang);
 
       const chartData = {
         tenMinutes: {
-          labels: buckets,
+          labels,
           datasets: [
             { label: 'Masuk', data: masuk, backgroundColor: 'rgba(21,128,61,0.7)' },
             { label: 'Pulang', data: pulang, backgroundColor: 'rgba(161,98,7,0.7)' }

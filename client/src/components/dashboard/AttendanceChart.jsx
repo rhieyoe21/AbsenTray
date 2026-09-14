@@ -68,8 +68,11 @@ export default function AttendanceChart() {
       x: {
         ticks: {
           color: isDark ? '#9ca3af' : '#6b7280',
-          maxTicksLimit: 24,
-          callback: (value, index) => (index % 3 === 0 ? tenMinutes.labels[index] : '')
+          maxRotation: 0,
+          // Tampilkan semua label (per 10 menit) kecuali terlalu banyak.
+          autoSkip: tenMinutes.labels.length > 50,
+          maxTicksLimit: tenMinutes.labels.length > 50 ? 25 : undefined,
+          callback: (value) => tenMinutes.labels[value] || ''
         },
         grid: { display: false }
       }
@@ -108,16 +111,16 @@ export default function AttendanceChart() {
                     data: masukSeries,
                     backgroundColor: chartColors.success,
                     borderColor: chartColors.success,
-                    borderWidth: 1,
-                    borderRadius: 3
+                    borderWidth: 4,
+                    borderRadius: 2
                   },
                   {
                     label: 'Pulang',
                     data: pulangSeries,
                     backgroundColor: chartColors.warning,
                     borderColor: chartColors.warning,
-                    borderWidth: 1,
-                    borderRadius: 3
+                    borderWidth: 4,
+                    borderRadius: 2
                   }
                 ]
               }}
