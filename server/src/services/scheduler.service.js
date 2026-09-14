@@ -345,11 +345,15 @@ class SchedulerService extends EventEmitter {
     const job = cron.schedule('0 2 * * *', () => {
       logger.info('Running daily maintenance');
       
-      // Clean up old device logs (keep 30 days)
-      database.cleanupOldDeviceLogs(30);
+      // Bersihkan log device yang lebih lama dari batas retensi (hari).
+      try {
+        const retention = parseInt(database.getSetting('device_log_retention_days'), 10) || 30;
+        const r = database.cleanupOldDeviceLogs(retention);
+        logger.info(`Log device dibersihkan: ${r.deleted} dihapus (retensi ${retention} hari)`);
+      } catch (e) {
+        logger.error('Gagal membersihkan log device', { error: e.message || String(e) });
+      }
       
-      // Clean up old attendance (keep 1 year)
-      // This is optional, but recommended for performance
       logger.info('Daily maintenance completed');
     });
     

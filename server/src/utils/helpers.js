@@ -59,6 +59,12 @@ const formatters = {
   // Check whether a date falls on "today" in the local timezone
   isTodayLocal(date, tz = 'Asia/Jakarta') {
     return moment(date).tz(tz).format('YYYY-MM-DD') === moment().tz(tz).format('YYYY-MM-DD');
+  },
+
+  // Tanggal-waktu lengkap dalam zona WIB (container sering di UTC — jangan
+  // pakai toLocaleString() berbasis zona server).
+  formatLocalDateTime(date = new Date(), tz = 'Asia/Jakarta') {
+    return moment(date).tz(tz).locale('id').format('dddd, DD MMMM YYYY, HH:mm');
   }
 };
 

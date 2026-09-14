@@ -370,10 +370,8 @@ class SettingsController {
       
       const chatId = helpers.formatWhatsAppNumber(String(number).trim());
       const message = helpers.renderTemplate(template.content, {
-        datetime: new Date().toLocaleString('id-ID', {
-          dateStyle: 'full',
-          timeStyle: 'medium'
-        })
+        // WIB — jangan pakai toLocaleString (zona server/container bisa UTC)
+        datetime: helpers.formatLocalDateTime()
       });
       
       logger.info(`Ping WAHA to ${chatId}`, { number });

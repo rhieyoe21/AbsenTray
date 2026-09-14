@@ -601,6 +601,15 @@ class DatabaseService {
     return { success: true, changes: result.changes };
   }
 
+  // Hapus log device yang lebih tua dari `days` hari (jadwal harian).
+  cleanupOldDeviceLogs(days = 30) {
+    const stmt = this.db.prepare(
+      "DELETE FROM device_logs WHERE created_at < datetime('now', '-' || ? || ' days')"
+    );
+    const result = stmt.run(parseInt(days) || 30);
+    return { deleted: result.changes };
+  }
+
   // Utility methods
   backupDatabase(backupPath) {
     this.db.backup(backupPath).then(() => {

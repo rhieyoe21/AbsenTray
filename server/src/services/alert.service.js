@@ -1,7 +1,8 @@
-const config = require('../config');
+﻿const config = require('../config');
 const logger = require('../utils/logger');
 const whatsappService = require('./whatsapp.service');
 const database = require('./database.service');
+const helpers = require('../utils/helpers');
 
 class AlertService {
   constructor() {
@@ -28,7 +29,7 @@ class AlertService {
 
 async handleDeviceOffline(data) {
     if (!this.isEnabled()) {
-      logger.info('Admin alerts disabled — skipping device offline alert');
+      logger.info('Admin alerts disabled - skipping device offline alert');
       return { success: false, skipped: true };
     }
     
@@ -37,18 +38,15 @@ async handleDeviceOffline(data) {
     // Send the offline alert ONCE per outage episode, not again until the
     // device connects back (handleDeviceRecovery resets this flag).
     if (this.offlineNotified) {
-      logger.debug('Offline alert already sent for this episode — skipping');
+      logger.debug('Offline alert already sent for this episode - skipping');
       return { success: false, skipped: true };
     }
     this.offlineNotified = true;
     
     const now = new Date();
-    const formattedTime = now.toLocaleString('id-ID', {
-      dateStyle: 'full',
-      timeStyle: 'medium'
-    });
+    const formattedTime = helpers.formatLocalDateTime(now);
     
-    const message = `⚠️ *ALERT: Perangkat Fingerprint Offline*\n\n` +
+    const message = `*ALERT: Perangkat Fingerprint Offline*\n\n` +
       `IP: ${ip || config.fingerprint.ip}\n` +
       `Waktu: ${formattedTime}\n\n` +
       `Error: ${error || 'Koneksi gagal'}\n\n` +
@@ -72,16 +70,13 @@ async handleDeviceOffline(data) {
     this.offlineNotified = false;
     
     if (!this.isEnabled()) {
-      logger.info('Admin alerts disabled — skipping device recovery alert');
+      logger.info('Admin alerts disabled - skipping device recovery alert');
       return { success: false, skipped: true };
     }
     
-    const formattedTime = new Date().toLocaleString('id-ID', {
-      dateStyle: 'full',
-      timeStyle: 'medium'
-    });
+    const formattedTime = helpers.formatLocalDateTime()
     
-    const message = `✅ *Perangkat Fingerprint Kembali Online*\n\n` +
+    const message = `*Perangkat Fingerprint Kembali Online*\n\n` +
       `IP: ${ip || config.fingerprint.ip}\n` +
       `Waktu: ${formattedTime}\n\n` +
       `Perangkat berhasil terhubung kembali.`;
@@ -99,7 +94,7 @@ async handleDeviceOffline(data) {
 
   async sendWahaOffline(error) {
     if (!this.isEnabled()) {
-      logger.info('Admin alerts disabled — skipping WAHA offline alert');
+      logger.info('Admin alerts disabled - skipping WAHA offline alert');
       return { success: false, skipped: true };
     }
     
@@ -112,12 +107,9 @@ async handleDeviceOffline(data) {
     
     this.lastWahaOfflineAlert = new Date();
     
-    const formattedTime = new Date().toLocaleString('id-ID', {
-      dateStyle: 'full',
-      timeStyle: 'medium'
-    });
+    const formattedTime = helpers.formatLocalDateTime()
     
-    const message = `⚠️ *ALERT: WAHA WhatsApp API Offline*\n\n` +
+    const message = `*ALERT: WAHA WhatsApp API Offline*\n\n` +
       `URL: ${config.waha.url}\n` +
       `Waktu: ${formattedTime}\n\n` +
       `Error: ${error || 'Tidak dapat terhubung keporn WAHA'}\n\n` +
@@ -136,16 +128,13 @@ async handleDeviceOffline(data) {
 
   async sendRetryExhausted(transactionId) {
     if (!this.isEnabled()) {
-      logger.info('Admin alerts disabled — skipping retry exhausted alert');
+      logger.info('Admin alerts disabled - skipping retry exhausted alert');
       return { success: false, skipped: true };
     }
     
-    const formattedTime = new Date().toLocaleString('id-ID', {
-      dateStyle: 'full',
-      timeStyle: 'medium'
-    });
+    const formattedTime = helpers.formatLocalDateTime()
     
-    const message = `⚠️ *ALERT: Pengiriman Pesan Gagal Permanen*\n\n` +
+    const message = `*ALERT: Pengiriman Pesan Gagal Permanen*\n\n` +
       `Transaction ID: ${transactionId}\n` +
       `Waktu: ${formattedTime}\n\n` +
       `Semua percobaan retry telah habis. Pesan tidak dapat dikirim.\n` +
@@ -164,16 +153,13 @@ async handleDeviceOffline(data) {
 
   async sendErrorAlert(error, context = {}) {
     if (!this.isEnabled()) {
-      logger.info('Admin alerts disabled — skipping system error alert');
+      logger.info('Admin alerts disabled - skipping system error alert');
       return { success: false, skipped: true };
     }
     
-    const formattedTime = new Date().toLocaleString('id-ID', {
-      dateStyle: 'full',
-      timeStyle: 'medium'
-    });
+    const formattedTime = helpers.formatLocalDateTime()
     
-    const message = `⚠️ *ALERT: Error Sistem*\n\n` +
+    const message = `*ALERT: Error Sistem*\n\n` +
       `Waktu: ${formattedTime}\n` +
       `Error: ${error}\n` +
       `Context: ${JSON.stringify(context)}\n\n` +

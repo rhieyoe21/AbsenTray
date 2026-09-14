@@ -100,7 +100,7 @@ const TemplateEditor = ({ template, onClose, onSave }) => {
             <textarea
               name="content"
               className="textarea textarea-bordered font-mono text-sm h-48"
-              placeholder={`âœ… *Presensi {mode}*\nNama: {name}\nUID: {uid}\nHari: {date}\nJam: {time}`}
+              placeholder={`*Presensi {mode}*\nNama: {name}\nUID: {uid}\nHari: {date}\nJam: {time}`}
               value={formData.content}
               onChange={handleChange}
               required

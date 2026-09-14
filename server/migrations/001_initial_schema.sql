@@ -125,7 +125,8 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
 ('checkin_end', '11:59'),
 ('checkout_start', '12:00'),
 ('checkout_end', '23:59'),
-('fingerprint_disable_before_read', '1');
+('fingerprint_disable_before_read', '1'),
+('device_log_retention_days', '30');
 
 -- Create trigger for updated_at timestamp
 CREATE TRIGGER IF NOT EXISTS update_users_timestamp 
