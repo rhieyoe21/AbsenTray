@@ -46,7 +46,7 @@ export default function Monitoring() {
           <p className="text-sm text-base-content/60">Status perangkat, antrean kirim ulang, dan log sistem.</p>
         </header>
 
-      {/* Connection Status */}
+      {/* Connection Status
       <div className={`alert ${isConnected ? 'alert-success' : 'alert-warning'}`}>
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export default function Monitoring() {
             Real-time updates: {isConnected ? 'Live' : 'Reconnecting...'}
           </p>
         </div>
-      </div>
+      </div> */}
 
       {/* Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

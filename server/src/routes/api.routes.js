@@ -1,6 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { apiLimiter } = require('../middleware/rateLimit');
+
+// Multer in-memory utk upload file (CSV user) — maks 10MB.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
 // Controllers
 const attendanceController = require('../controllers/attendance.controller');
@@ -22,12 +29,12 @@ router.post('/attendance/manual', attendanceController.createManualAttendance);
 
 // Users routes
 router.get('/users', usersController.getUsers);
+router.post('/users/import', upload.single('file'), usersController.importUsers);
+router.get('/users/export', usersController.exportUsers);
 router.get('/users/:uid', usersController.getUser);
 router.post('/users', usersController.createUser);
 router.put('/users/:uid', usersController.updateUser);
 router.delete('/users/:uid', usersController.deleteUser);
-router.post('/users/import', usersController.importUsers);
-router.get('/users/export', usersController.exportUsers);
 
 // Templates routes
 router.get('/templates', templatesController.getTemplates);

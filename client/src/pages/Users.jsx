@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline'
+import React, { useState, useRef } from 'react'
+import { PencilSquareIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { usersAPI } from '../services/api'
@@ -183,9 +183,43 @@ export default function Users() {
       a.click()
       window.URL.revokeObjectURL(url)
       
-      toast.success('Users exported to CSV')
+      toast.success('Karyawan diekspor ke CSV')
     } catch (error) {
-      toast.error('Failed to export users')
+      toast.error('Gagal mengekspor karyawan')
+    }
+  }
+
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState(null)
+  const fileInputRef = useRef(null)
+
+  const handleDownloadTemplate = () => {
+    const csv = 'uid,name,wa\n827305001,NAMA KARYAWAN,628XXXXXXXXXX\n'
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'template_user.csv'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    toast.success('Template CSV diunduh')
+  }
+
+  const handleImportFile = async (file) => {
+    if (!file) return
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const res = await usersAPI.import(file)
+      setImportResult(res?.data)
+      queryClient.invalidateQueries(['users'])
+      queryClient.invalidateQueries(['users-all'])
+      toast.success(`${res.data.imported} karyawan diimpor`)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Gagal impor CSV')
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -221,19 +255,67 @@ export default function Users() {
               </button>
             </form>
             
-            {/* Action buttons */}
-            <div className="flex gap-2">
+{/* Action buttons */}
+            <div className="flex flex-wrap gap-2 items-center">
               <button className="btn btn-sm btn-outline" onClick={handleExport}>
                 Ekspor CSV
               </button>
+              <button className="btn btn-sm btn-outline" onClick={handleDownloadTemplate}>
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                Template
+              </button>
+              <button
+                className="btn btn-sm btn-outline btn-info"
+                disabled={importing}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {importing ? <span className="loading loading-spinner loading-xs"></span> : <ArrowUpTrayIcon className="w-4 h-4" />}
+                Impor CSV
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => handleImportFile(e.target.files?.[0])}
+              />
               <button 
                 className="btn btn-sm btn-success"
                 onClick={() => setShowCreateModal(true)}
               >
-                Tambah Guru
+                Tambah Karyawan
               </button>
             </div>
           </div>
+
+          {/* Import summary */}
+          {importResult && (
+            <div className="mt-4 rounded-xl border border-base-300 bg-base-200/50 p-4 text-sm">
+              <div className="font-semibold mb-2">Hasil impor</div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <div className="text-xl font-semibold text-success">{importResult.imported}</div>
+                  <div className="text-xs text-base-content/60">Diimpor</div>
+                </div>
+                <div>
+                  <div className="text-xl font-semibold text-warning">{importResult.skipped}</div>
+                  <div className="text-xs text-base-content/60">Dilewati</div>
+                </div>
+                <div>
+                  <div className="text-xl font-semibold text-error">{importResult.errors}</div>
+                  <div className="text-xs text-base-content/60">Gagal</div>
+                </div>
+              </div>
+              {importResult.skippedReasons?.length > 0 && (
+                <ul className="mt-3 space-y-1 list-disc list-inside text-xs text-base-content/70">
+                  {importResult.skippedReasons.slice(0, 5).map((s, i) => (
+                    <li key={i}>{s.uid ? `UID ${s.uid} — ${s.reason}` : s.reason}</li>
+                  ))}
+                </ul>
+              )}
+              <button className="btn btn-xs btn-ghost mt-2" onClick={() => setImportResult(null)}>Tutup</button>
+            </div>
+          )}
 
           {/* Users table */}
           <div className="overflow-x-auto">

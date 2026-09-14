@@ -3,20 +3,18 @@ import { API_BASE_URL } from '../utils/constants';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: API_BASE_URL
 });
 
-// Request interceptor for adding auth tokens if needed
+// Request interceptor — set Content-Type JSON hanya utk body non-FormData
+// (FormData butuh header auto browser agar boundary multipart benar).
 api.interceptors.request.use(
   (config) => {
-    // Add auth token here if needed in future
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    if (config.data && config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    } else {
+      config.headers['Content-Type'] = 'application/json';
+    }
     return config;
   },
   (error) => {
@@ -57,7 +55,11 @@ export const usersAPI = {
   create: (data) => api.post('/users', data),
   update: (uid, data) => api.put(`/users/${uid}`, data),
   delete: (uid) => api.delete(`/users/${uid}`),
-  import: (data) => api.post('/users/import', data),
+  import: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/users/import', fd);
+  },
   export: () => api.get('/users/export')
 };
 

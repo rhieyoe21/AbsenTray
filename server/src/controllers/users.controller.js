@@ -2,6 +2,7 @@ const database = require('../services/database.service');
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
+const { Readable } = require('stream');
 const csv = require('csv-parser');
 
 class UsersController {
@@ -132,56 +133,81 @@ class UsersController {
 
   async importUsers(req, res, next) {
     try {
-      // In production, use multer for file upload
-      // For now, expect file path in body
-      const { filePath } = req.body;
-      
-      if (!filePath || !fs.existsSync(filePath)) {
+      // Upload file CSV (multer) — kolom: uid,name,wa (tanpa header wajib).
+      if (!req.file || !req.file.buffer) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid or missing file path'
+          error: 'File CSV wajib diunggah'
         });
       }
       
-      const users = [];
-      let imported = 0;
-      let skipped = 0;
-      let errors = [];
-      
-      fs.createReadStream(filePath)
-        .pipe(csv())
-        .on('data', (row) => {
-          try {
-            if (row.uid && row.name && row.wa) {
-              database.createUser({
-                uid: row.uid.trim(),
-                name: row.name.trim(),
-                whatsapp_number: row.wa.trim()
-              });
-              imported++;
-            } else {
-              skipped++;
-            }
-          } catch (error) {
-            errors.push({ row, error: error.message });
-            skipped++;
-          }
-        })
-        .on('end', () => {
-          logger.info('CSV import completed', { imported, skipped, errors: errors.length });
-          
-          res.json({
-            success: true,
-            data: {
-              imported,
-              skipped,
-              errors: errors.slice(0, 10) // Limit error list
-            }
-          });
-        })
-        .on('error', (error) => {
-          next(error);
+      const buffer = req.file.buffer;
+      if (buffer.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'File CSV kosong'
         });
+      }
+      
+      const imported = [];
+      const skipped = [];
+      const errors = [];
+      const seenUid = new Set(); // pastikan UID unik dalam satu file
+      
+      await new Promise((resolve, reject) => {
+        Readable.from(buffer)
+          .pipe(csv())
+          .on('data', (row) => {
+            try {
+              const uid = String(row.uid || '').trim();
+              const name = String(row.name || '').trim();
+              const wa = String(row.wa || row.whatsapp_number || '').trim().replace(/\D/g, '');
+              
+              if (!uid || !name || !wa) {
+                skipped.push({ row, reason: 'kolom uid/name/wa tidak lengkap' });
+                return;
+              }
+              
+              if (seenUid.has(uid)) {
+                skipped.push({ uid, reason: `UID ${uid} duplikat dalam file` });
+                return;
+              }
+              seenUid.add(uid);
+              
+              const existing = database.getUser(uid);
+              if (existing) {
+                skipped.push({ uid, reason: `UID ${uid} sudah ada` });
+                return;
+              }
+              
+              database.createUser({ uid, name, whatsapp_number: wa });
+              imported.push({ uid, name });
+            } catch (error) {
+              errors.push({ row, error: error.message });
+            }
+          })
+          .on('end', resolve)
+          .on('error', reject);
+      });
+      
+      logger.info('CSV import completed', {
+        filename: req.file.originalname,
+        imported: imported.length,
+        skipped: skipped.length,
+        errors: errors.length
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          imported: imported.length,
+          skipped: skipped.length,
+          errors: errors.length,
+          importedUsers: imported.slice(0, 50),
+          skippedReasons: skipped.slice(0, 50),
+          errorRows: errors.slice(0, 10)
+        }
+      });
     } catch (error) {
       next(error);
     }

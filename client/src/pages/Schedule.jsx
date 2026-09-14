@@ -142,7 +142,7 @@ export default function Schedule() {
       {/* Polling schedule panel */}
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
-          <h2 className="card-title">🗓️ Jadwal Polling Fingerprint</h2>
+          <h2 className="card-title">Jadwal Polling Fingerprint</h2>
 
           <div className="form-control">
             <label className="label"><span className="label-text font-medium">Mode Jadwal</span></label>
