@@ -74,6 +74,22 @@ class DatabaseService {
     }
   }
   
+  // Re-aktifkan user yang sebelumnya di-nonaktifkan (soft delete) sambil
+  // memperbarui data. Dipakai saat import ulang.
+  reactivateUser(uid, data) {
+    const { name, whatsapp_number } = data;
+    const stmt = this.db.prepare(`
+      UPDATE users
+      SET is_active = 1,
+          name = COALESCE(?, name),
+          whatsapp_number = COALESCE(?, whatsapp_number),
+          updated_at = datetime('now', '+7 hours')
+      WHERE uid = ?
+    `);
+    const result = stmt.run(name ?? null, whatsapp_number ?? null, uid);
+    return { success: true, changes: result.changes };
+  }
+  
   updateUser(uid, data) {
     const { name, whatsapp_number, is_active } = data;
     const fields = [];

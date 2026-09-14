@@ -188,8 +188,15 @@ class UsersController {
           seenUid.add(uid);
           
           const existing = database.getUser(uid);
-          if (existing) {
+          if (existing && existing.is_active === 1) {
             skipped.push({ uid, reason: `UID ${uid} sudah ada` });
+            return;
+          }
+          
+          if (existing && existing.is_active === 0) {
+            // User dihapus (nonaktif) — re-aktifkan & perbarui datanya.
+            database.reactivateUser(uid, { name, whatsapp_number: wa });
+            imported.push({ uid, name, reactivated: true });
             return;
           }
           
