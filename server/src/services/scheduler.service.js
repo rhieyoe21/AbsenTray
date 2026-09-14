@@ -304,38 +304,55 @@ class SchedulerService extends EventEmitter {
     }
   }
 
+  async runDeviceHealthCheck() {
+    this.lastDeviceCheck = new Date();
+    
+    logger.debug('Running device health check');
+    
+    const isOnline = await fingerprintService.checkConnection();
+    
+    if (!isOnline) {
+      logger.warn('Device health check failed - device offline');
+      this.emit('device:offline', {
+        ip: config.fingerprint.ip,
+        error: 'Health check failed'
+      });
+    } else {
+      logger.debug('Device health check passed - device online');
+    }
+    return isOnline;
+  }
+
   startDeviceHealthCheck() {
-    const job = cron.schedule('*/5 * * * *', async () => {
-      this.lastDeviceCheck = new Date();
-      
-      logger.debug('Running device health check');
-      
-      const isOnline = await fingerprintService.checkConnection();
-      
-      if (!isOnline) {
-        logger.warn('Device health check failed - device offline');
-        this.emit('device:offline', {
-          ip: config.fingerprint.ip,
-          error: 'Health check failed'
-        });
-      } else {
-        logger.debug('Device health check passed - device online');
-      }
+    // Cek langsung saat boot — status perangkat akurat sejak awal.
+    this.runDeviceHealthCheck().catch((e) => logger.error('Boot device health check failed', { error: e.message }));
+    
+    const job = cron.schedule('*/5 * * * *', () => {
+      this.runDeviceHealthCheck().catch((e) => logger.error('Device health check failed', { error: e.message }));
     });
     
     this.jobs.push(job);
   }
 
+  async runWahaHealthCheck() {
+    logger.debug('Running WAHA health check');
+    
+    const result = await whatsappService.checkStatus();
+    
+    if (!result.connected) {
+      logger.warn('WAHA health check failed');
+      alertService.sendWahaOffline(result.error);
+    }
+    return result;
+  }
+
   startWahaHealthCheck() {
-    const job = cron.schedule('*/5 * * * *', async () => {
-      logger.debug('Running WAHA health check');
-      
-      const result = await whatsappService.checkStatus();
-      
-      if (!result.connected) {
-        logger.warn('WAHA health check failed');
-        alertService.sendWahaOffline(result.error);
-      }
+    // Cek langsung saat boot — agar status WhatsApp API langsung hijau setelah
+    // container restart (tanpa menunggu menit ke-0/jadwal berikutnya).
+    this.runWahaHealthCheck().catch((e) => logger.error('Boot WAHA health check failed', { error: e.message }));
+    
+    const job = cron.schedule('*/1 * * * *', () => {
+      this.runWahaHealthCheck().catch((e) => logger.error('WAHA health check failed', { error: e.message }));
     });
     
     this.jobs.push(job);
