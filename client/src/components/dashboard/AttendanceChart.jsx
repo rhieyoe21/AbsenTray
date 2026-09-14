@@ -43,20 +43,31 @@ export default function AttendanceChart() {
   const masukSeries = tenMinutes.datasets?.find((d) => d.label === 'Masuk')?.data || []
   const pulangSeries = tenMinutes.datasets?.find((d) => d.label === 'Pulang')?.data || []
 
+  // Satu bar per slot di tengah kategori, warna mengikuti mode (tidak pernah
+  // ada Masuk & Pulang di slot yang sama).
+  const combined = tenMinutes.labels.map((_, i) => (masukSeries[i] || 0) + (pulangSeries[i] || 0))
+  const barColors = tenMinutes.labels.map((_, i) =>
+    pulangSeries[i] > 0 ? chartColors.warning : chartColors.success
+  )
+
   const barOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: {
-      legend: {
-        display: true,
-        labels: { color: isDark ? '#f9fafb' : '#1f2937', boxWidth: 14 }
-      },
-      title: {
-        display: true,
-        text: 'Absensi tiap 10 menit — Masuk vs Pulang',
-        color: isDark ? '#f9fafb' : '#1f2937',
-        font: { size: 16, weight: 'bold' }
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const i = ctx.dataIndex
+            const masuk = masukSeries[i] || 0
+            const pulang = pulangSeries[i] || 0
+            const parts = []
+            if (masuk > 0) parts.push(`Masuk: ${masuk}`)
+            if (pulang > 0) parts.push(`Pulang: ${pulang}`)
+            return parts.join('  |  ')
+          }
+        }
       }
     },
     scales: {
@@ -98,31 +109,36 @@ export default function AttendanceChart() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* 10-minute bar chart — Masuk vs Pulang */}
+      {/* 10-minute bar chart — satu bar per slot, warna sesuai mode */}
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold">Absensi tiap 10 menit</h3>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-sm" style={{ background: chartColors.success }} />
+                Masuk
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-sm" style={{ background: chartColors.warning }} />
+                Pulang
+              </span>
+            </div>
+          </div>
           <div className="h-72">
             <Bar
               data={{
                 labels: tenMinutes.labels,
-                datasets: [
-                  {
-                    label: 'Masuk',
-                    data: masukSeries,
-                    backgroundColor: chartColors.success,
-                    borderColor: chartColors.success,
-                    borderWidth: 4,
-                    borderRadius: 2
-                  },
-                  {
-                    label: 'Pulang',
-                    data: pulangSeries,
-                    backgroundColor: chartColors.warning,
-                    borderColor: chartColors.warning,
-                    borderWidth: 4,
-                    borderRadius: 2
-                  }
-                ]
+                datasets: [{
+                  label: 'Absensi',
+                  data: combined,
+                  backgroundColor: barColors,
+                  borderColor: barColors,
+                  borderWidth: 4,
+                  borderRadius: 2,
+                  categoryPercentage: 0.75,
+                  barPercentage: 1
+                }]
               }}
               options={barOptions}
             />
