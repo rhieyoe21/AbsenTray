@@ -170,43 +170,55 @@ export default function Users() {
     setPage(0)
   }
 
-  const handleExport = async () => {
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleExportCSV = async () => {
     try {
-      const response = await usersAPI.export()
-      
-      // Create download link
-      const blob = new Blob([response], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `users_export_${new Date().toISOString().slice(0, 10)}.csv`
-      a.click()
-      window.URL.revokeObjectURL(url)
-      
+      const blob = await usersAPI.exportCSV()
+      downloadBlob(blob, `karyawan_export_${new Date().toISOString().slice(0, 10)}.csv`)
       toast.success('Karyawan diekspor ke CSV')
     } catch (error) {
       toast.error('Gagal mengekspor karyawan')
     }
   }
 
+  const handleExportExcel = async () => {
+    try {
+      const blob = await usersAPI.exportXLSX()
+      downloadBlob(blob, `karyawan_export_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      toast.success('Karyawan diekspor ke file Excel (.xlsx)')
+    } catch (error) {
+      toast.error('Gagal mengekspor karyawan')
+    }
+  }
+
+  const [showImport, setShowImport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
-  const fileInputRef = useRef(null)
+  const importFileRef = useRef(null)
 
   const handleDownloadTemplate = () => {
-    const csv = 'uid,name,wa\n827305001,NAMA KARYAWAN,628XXXXXXXXXX\n'
+    const csv = 'uid,name,wa\n827305001,NAMA GURU,628XXXXXXXXXX\n'
     const blob = new Blob([csv], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'template_user.csv'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    downloadBlob(blob, 'template_guru.csv')
     toast.success('Template CSV diunduh')
   }
 
-  const handleImportFile = async (file) => {
-    if (!file) return
+  const handleImport = async () => {
+    const file = importFileRef.current?.files?.[0]
+    if (!file) {
+      toast.error('Pilih file CSV/Excel terlebih dahulu')
+      return
+    }
     setImporting(true)
     setImportResult(null)
     try {
@@ -214,12 +226,12 @@ export default function Users() {
       setImportResult(res?.data)
       queryClient.invalidateQueries(['users'])
       queryClient.invalidateQueries(['users-all'])
-      toast.success(`${res.data.imported} karyawan diimpor`)
+      toast.success(`${res.data.imported} guru diimpor`)
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Gagal impor CSV')
+      toast.error(err.response?.data?.error || 'Gagal impor file')
     } finally {
       setImporting(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (importFileRef.current) importFileRef.current.value = ''
     }
   }
 
@@ -257,65 +269,35 @@ export default function Users() {
             
 {/* Action buttons */}
             <div className="flex flex-wrap gap-2 items-center">
-              <button className="btn btn-sm btn-outline" onClick={handleExport}>
-                Ekspor CSV
-              </button>
-              <button className="btn btn-sm btn-outline" onClick={handleDownloadTemplate}>
+              {/* Export dropdown */}
+              <div className="dropdown dropdown-end">
+                <button tabIndex={0} className="btn btn-sm btn-outline">
+                  <ArrowUpTrayIcon className="w-4 h-4" />
+                  Ekspor
+                </button>
+                <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-44">
+                  <li>
+                    <button onClick={handleExportCSV}>Ekspor CSV</button>
+                  </li>
+                  <li>
+                    <button onClick={handleExportExcel}>Ekspor Excel (.xlsx)</button>
+                  </li>
+                </ul>
+              </div>
+
+              <button className="btn btn-sm btn-outline btn-info" onClick={() => { setImportResult(null); setShowImport(true) }}>
                 <ArrowDownTrayIcon className="w-4 h-4" />
-                Template
+                Impor CSV/Excel
               </button>
-              <button
-                className="btn btn-sm btn-outline btn-info"
-                disabled={importing}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {importing ? <span className="loading loading-spinner loading-xs"></span> : <ArrowUpTrayIcon className="w-4 h-4" />}
-                Impor CSV
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => handleImportFile(e.target.files?.[0])}
-              />
+
               <button 
                 className="btn btn-sm btn-success"
                 onClick={() => setShowCreateModal(true)}
               >
-                Tambah Karyawan
+                Tambah Guru
               </button>
             </div>
           </div>
-
-          {/* Import summary */}
-          {importResult && (
-            <div className="mt-4 rounded-xl border border-base-300 bg-base-200/50 p-4 text-sm">
-              <div className="font-semibold mb-2">Hasil impor</div>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <div className="text-xl font-semibold text-success">{importResult.imported}</div>
-                  <div className="text-xs text-base-content/60">Diimpor</div>
-                </div>
-                <div>
-                  <div className="text-xl font-semibold text-warning">{importResult.skipped}</div>
-                  <div className="text-xs text-base-content/60">Dilewati</div>
-                </div>
-                <div>
-                  <div className="text-xl font-semibold text-error">{importResult.errors}</div>
-                  <div className="text-xs text-base-content/60">Gagal</div>
-                </div>
-              </div>
-              {importResult.skippedReasons?.length > 0 && (
-                <ul className="mt-3 space-y-1 list-disc list-inside text-xs text-base-content/70">
-                  {importResult.skippedReasons.slice(0, 5).map((s, i) => (
-                    <li key={i}>{s.uid ? `UID ${s.uid} — ${s.reason}` : s.reason}</li>
-                  ))}
-                </ul>
-              )}
-              <button className="btn btn-xs btn-ghost mt-2" onClick={() => setImportResult(null)}>Tutup</button>
-            </div>
-          )}
 
           {/* Users table */}
           <div className="overflow-x-auto">
@@ -420,6 +402,70 @@ export default function Users() {
           </div>
         </div>
       </div>
+
+      {/* Import Modal */}
+      {showImport && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-md">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg">Impor Guru</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowImport(false)}>Tutup</button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between rounded-xl bg-base-200 p-3">
+                <span className="text-sm text-base-content/70">Belum punya format yang benar?</span>
+                <button className="btn btn-sm btn-outline" onClick={handleDownloadTemplate}>
+                  <ArrowDownTrayIcon className="w-4 h-4" />
+                  Unduh Template
+                </button>
+              </div>
+
+              <div className="form-control">
+                <label className="label"><span className="label-text font-medium">Pilih file CSV / Excel (.csv, .xlsx)</span></label>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="file-input file-input-bordered file-input-sm w-full"
+                />
+                <label className="label"><span className="label-text-alt">Kolom: uid,name,wa — format otomatis terdeteksi (CSV atau Excel).</span></label>
+              </div>
+
+              <button className="btn btn-primary w-full" onClick={handleImport} disabled={importing}>
+                {importing && <span className="loading loading-spinner loading-xs"></span>}
+                Impor Sekarang
+              </button>
+
+              {importResult && (
+                <div className="rounded-xl border border-base-300 bg-base-200/50 p-4 text-sm">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-xl font-semibold text-success">{importResult.imported}</div>
+                      <div className="text-xs text-base-content/60">Diimpor</div>
+                    </div>
+                    <div>
+                      <div className="text-xl font-semibold text-warning">{importResult.skipped}</div>
+                      <div className="text-xs text-base-content/60">Dilewati</div>
+                    </div>
+                    <div>
+                      <div className="text-xl font-semibold text-error">{importResult.errors}</div>
+                      <div className="text-xs text-base-content/60">Gagal</div>
+                    </div>
+                  </div>
+                  {importResult.skippedReasons?.length > 0 && (
+                    <ul className="mt-3 space-y-1 list-disc list-inside text-xs text-base-content/70">
+                      {importResult.skippedReasons.slice(0, 5).map((s, i) => (
+                        <li key={i}>{s.uid ? `UID ${s.uid} — ${s.reason}` : s.reason}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

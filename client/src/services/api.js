@@ -60,7 +60,8 @@ export const usersAPI = {
     fd.append('file', file);
     return api.post('/users/import', fd);
   },
-  export: () => api.get('/users/export')
+  exportCSV: () => api.get('/users/export/csv', { responseType: 'blob' }),
+  exportXLSX: () => api.get('/users/export/xlsx', { responseType: 'blob' })
 };
 
 export const templatesAPI = {

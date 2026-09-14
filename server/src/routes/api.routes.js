@@ -30,7 +30,8 @@ router.post('/attendance/manual', attendanceController.createManualAttendance);
 // Users routes
 router.get('/users', usersController.getUsers);
 router.post('/users/import', upload.single('file'), usersController.importUsers);
-router.get('/users/export', usersController.exportUsers);
+router.get('/users/export/csv', usersController.exportUsersCSV);
+router.get('/users/export/xlsx', usersController.exportUsersExcel);
 router.get('/users/:uid', usersController.getUser);
 router.post('/users', usersController.createUser);
 router.put('/users/:uid', usersController.updateUser);
