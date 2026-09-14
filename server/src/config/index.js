@@ -59,6 +59,10 @@ const config = {
   cors: {
     origin: process.env.CLIENT_URL || 'http://localhost:3000'
   },
+
+  // Di belakang reverse proxy (nginx/CasaOS): percayai X-Forwarded-For agar
+  // req.ip = IP client nyata (rate-limit & log lebih akurat).
+  trustProxy: process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true',
   
   retry: {
     maxAttempts: parseInt(process.env.MAX_RETRY_ATTEMPTS) || 3,

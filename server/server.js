@@ -26,6 +26,11 @@ function resolveCorsOrigin(raw) {
 const app = express();
 const server = http.createServer(app);
 const corsOrigin = resolveCorsOrigin(config.cors.origin);
+// Percayai proxy (mis. nginx / CasaOS) bila TRUST_PROXY diaktifkan — penting
+// agar req.ip memakai X-Forwarded-For (IP client nyata, bukan IP proxy).
+if (config.trustProxy) {
+  app.set('trust proxy', 1);
+}
 const io = socketIO(server, {
   cors: {
     origin: corsOrigin,

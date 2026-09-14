@@ -39,6 +39,12 @@ services:
       # CORS: '*' berarti izinkan akses dari IP/domain mana pun (disarankan utk
       # akses langsung. Ganti dgn origin spesifik jika perlu.
       - CLIENT_URL=${CLIENT_URL:-*}
+      # Rate limit API per IP (naikkan bila dashboard "Too many requests")
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-1000}
+      - RATE_LIMIT_WHITELIST=${RATE_LIMIT_WHITELIST:-127.0.0.1}
+      # =1 bila di belakang reverse proxy agar IP client terbaca benar
+      - TRUST_PROXY=${TRUST_PROXY:-0}
     volumes:
       - ./data:/app/server/data
       - ./logs:/app/server/logs
