@@ -22,20 +22,24 @@ export function useWebSocket() {
 
     // Listen to shared events using registry (no duplicate listeners)
     const offAttendance = onSocketEvent('attendance:new', (data) => {
-      setAttendanceEvents((prev) => [data, ...prev].slice(0, 50))
+      // Simpan time sebagai string (ISO) supaya aman di-render React.
+      setAttendanceEvents((prev) => [
+        { ...data, time: data.time instanceof Date ? data.time.toISOString() : (data.time || new Date().toISOString()) },
+        ...prev
+      ].slice(0, 50))
     })
 
     const offOffline = onSocketEvent('device:offline', (data) => {
       setDeviceEvents((prev) => [
         ...prev,
-        { ...data, type: 'offline', timestamp: new Date() }
+        { ...data, type: 'offline', timestamp: new Date().toLocaleString('id-ID') }
       ])
     })
 
     const offRecovered = onSocketEvent('device:recovered', (data) => {
       setDeviceEvents((prev) => [
         ...prev,
-        { ...data, type: 'recovered', timestamp: new Date() }
+        { ...data, type: 'recovered', timestamp: new Date().toLocaleString('id-ID') }
       ])
     })
 

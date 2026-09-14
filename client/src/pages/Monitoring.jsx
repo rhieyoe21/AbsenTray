@@ -88,7 +88,7 @@ export default function Monitoring() {
                       <div>
                         <span className="font-medium">{event.userName}</span>
                         <span className="text-xs pl-2">
-                          {new Date(event.time).toLocaleTimeString('id-ID')}
+                          {fmtDateTime(event.time)}
                         </span>
                       </div>
                       <span className={`badge badge-sm ${
@@ -128,7 +128,7 @@ export default function Monitoring() {
                         {event.type}
                       </span>
                       <span className="text-xs font-mono opacity-75">
-                        {event.timestamp?.toLocaleTimeString('id-ID')}
+                        {event.timestamp || '—'}
                       </span>
                     </div>
                     {event.error && (

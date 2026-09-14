@@ -81,7 +81,7 @@ export default function DeviceStatus() {
                     {log.status}
                   </span>
                   <span className="font-mono opacity-50">
-                    {new Date(log.created_at)}
+                    {new Date(log.created_at).toLocaleTimeString('id-ID')}
                   </span>
                 </div>
                 <p className="mt-1 opacity-75">{log.message}</p>
