@@ -39,7 +39,15 @@ const io = socketIO(server, {
 });
 
 // Middleware
-app.use(helmet({ contentSecurityPolicy: false })); // Security headers
+// Helmet — nonaktifkan header yang hanya berguna di HTTPS/trusted origin:
+// di self-host LAN (http://192.168.x.x) COOP/Origin-Agent-Cluster/COEP hanya
+// menghasilkan warning konsol.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  originAgentCluster: false
+})); // Security headers
 app.use(compression()); // Gzip compression
 app.use(cors({
   origin: corsOrigin,
