@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+logs/
+*.log
+.env
+.DS_Store
+Thumbs.db
+map_user.csv
+sent_log.txt

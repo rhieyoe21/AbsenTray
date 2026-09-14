@@ -1,0 +1,40 @@
+# Node modules
+node_modules/
+
+# Client build
+client/dist/
+
+# Environment
+.env
+.env.local
+*.env
+
+# Database and data
+server/data/
+server/backups/
+*.db
+*.db-shm
+*.db-wal
+
+# Real production data (PII) — never commit
+server/map_user.csv
+server/sent_log.txt
+
+# Logs
+server/logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+.idea/
+
+# Misc
+npm-debug.log*
+yarn-error.log*
+
+# Test files
+coverage/
