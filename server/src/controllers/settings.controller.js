@@ -16,7 +16,9 @@ class SettingsController {
         polling_enabled: database.getSetting('polling_enabled'),
         schedule_enabled: database.getSetting('schedule_enabled'),
         admin_alerts_enabled: database.getSetting('admin_alerts_enabled'),
-        fingerprint_disable_before_read: database.getSetting('fingerprint_disable_before_read')
+        fingerprint_disable_before_read: database.getSetting('fingerprint_disable_before_read'),
+        device_log_retention_days: database.getSetting('device_log_retention_days'),
+        waha_message_delay_ms: database.getSetting('waha_message_delay_ms')
       };
       
       const schedules = database.getPollingSchedules();

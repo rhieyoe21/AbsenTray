@@ -126,7 +126,8 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
 ('checkout_start', '12:00'),
 ('checkout_end', '23:59'),
 ('fingerprint_disable_before_read', '1'),
-('device_log_retention_days', '30');
+('device_log_retention_days', '30'),
+('waha_message_delay_ms', '2000');
 
 -- Create trigger for updated_at timestamp
 CREATE TRIGGER IF NOT EXISTS update_users_timestamp 

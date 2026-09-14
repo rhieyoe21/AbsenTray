@@ -20,7 +20,28 @@ class WhatsAppService {
     });
   }
 
+  // Jeda minimal antar pengiriman pesan (ms), diambil dari settings sehingga
+  // bisa diubah runtime. 0 = tanpa jeda.
+  async _throttle() {
+    let minGap = 2000;
+    try {
+      const v = parseInt(database.getSetting('waha_message_delay_ms'), 10);
+      if (!Number.isNaN(v)) minGap = Math.max(v, 0);
+    } catch (e) { /* default */ }
+    
+    const now = Date.now();
+    if (this._lastSendAt && now - this._lastSendAt < minGap) {
+      const wait = minGap - (now - this._lastSendAt);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    this._lastSendAt = Date.now();
+  }
+
   async sendText(chatId, text, options = {}) {
+    // Jeda minimal antar pengiriman — agar pesan absen berurutan tidak
+    // dikirim serentak (menghindari rate-limit & "pintu" pengiriman).
+    await this._throttle();
+    
     // Read live config — supports runtime setting changes without restart
     const wahaUrl = config.waha.url;
     const apiKey = config.waha.apiKey;

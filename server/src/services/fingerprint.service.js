@@ -34,6 +34,11 @@ function forceDestroySocket(conn) {
   }
 }
 
+// node-zklib mengembalikan jam device (waktu lokal — WIB) seolah-olah UTC.
+// Di server/container berzona UTC nilainya jadi +7 jam dari asli; koreksi ini
+// mengembalikan ke UTC yang benar (08:00 WIB → 01:00 UTC).
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 class FingerprintService extends EventEmitter {
   constructor() {
     super();
@@ -580,12 +585,19 @@ class FingerprintService extends EventEmitter {
     logger.info('Fingerprint polling stopped');
   }
 
+  // node-zklib mengembalikan jam device (waktu lokal — WIB) seolah-olah UTC;
+  // dikoreksi di transformLog (offset WIB didefinisikan module-scope di atas).
   transformLog(log) {
+    let ts = log.recordTime || Date.now();
+    let date = ts instanceof Date ? ts
+      : typeof ts === 'number' ? new Date(ts * 1000)
+      : new Date(ts);
+    
     // Map node-zklib log format to our format
     const record = {
       deviceIp: log.deviceIp || log.ip,
       userId: log.deviceUserId || log.userSn,
-      timestamp: new Date(log.recordTime || Date.now()),
+      timestamp: new Date(date.getTime() - WIB_OFFSET_MS),
       raw: log
     };
     

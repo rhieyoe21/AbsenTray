@@ -61,7 +61,9 @@ export default function Settings() {
       waha_api_key: '',
       admin_whatsapp: d.config?.admin?.whatsapp || '',
       max_retry: d.config?.retry?.maxAttempts || 3,
-      admin_alerts_enabled: d.settings?.admin_alerts_enabled !== '0'
+      admin_alerts_enabled: d.settings?.admin_alerts_enabled !== '0',
+      waha_delay: d.settings?.waha_message_delay_ms || 2000,
+      device_log_retention: d.settings?.device_log_retention_days || 30
     })
   }
 
@@ -77,7 +79,10 @@ export default function Settings() {
     try {
       await apply({
         fingerprint: { ip: form.fingerprint_ip, port: parseInt(form.fingerprint_port), timeout: parseInt(form.fingerprint_timeout), pollingInterval: parseInt(form.polling_interval) },
-        settings: { fingerprint_disable_before_read: form.disable_before_read ? '1' : '0' }
+        settings: {
+          fingerprint_disable_before_read: form.disable_before_read ? '1' : '0',
+          device_log_retention_days: String(parseInt(form.device_log_retention) || 30)
+        }
       })
       queryClient.invalidateQueries(['settings'])
       toast.success('Pengaturan perangkat disimpan')
@@ -99,7 +104,13 @@ export default function Settings() {
   const saveAdmin = async () => {
     setBusyKey('admin')
     try {
-      await apply({ admin: { whatsapp: form.admin_whatsapp }, retry: { maxAttempts: parseInt(form.max_retry) } })
+      await apply({
+        admin: { whatsapp: form.admin_whatsapp },
+        retry: { maxAttempts: parseInt(form.max_retry) },
+        settings: {
+          waha_message_delay_ms: String(parseInt(form.waha_delay) || 0)
+        }
+      })
       queryClient.invalidateQueries(['settings'])
       toast.success('Pengaturan admin disimpan')
     } catch (e) { toast.error(e.response?.data?.error?.message || 'Gagal simpan') }
@@ -178,6 +189,7 @@ export default function Settings() {
                   onChange={(e) => setForm((prev) => ({ ...prev, disable_before_read: e.target.checked }))} />
               </div>
             </div>
+            <Input label="Hari penghapusan log perangkat (default 30)" name="device_log_retention" value={form.device_log_retention} onChange={handleChange} type="number" suffix="hari" />
             <SaveButton onClick={saveDevice} loading={busyKey === 'device'} label="Simpan perangkat" />
           </div>
         </Panel>
@@ -203,6 +215,7 @@ export default function Settings() {
           <div className="space-y-3">
             <Input label="Nomor WhatsApp admin" name="admin_whatsapp" value={form.admin_whatsapp} onChange={handleChange} placeholder="cth: 628XXXXXXXXXX" />
             <Input label="Batas percobaan kirim ulang" name="max_retry" value={form.max_retry} onChange={handleChange} type="number" suffix="kali" />
+            <Input label="Jeda antar pesan WhatsApp" name="waha_delay" value={form.waha_delay} onChange={handleChange} type="number" suffix="ms" />
             <div className="form-control pt-1">
               <div className="flex items-center justify-between">
                 <div>
