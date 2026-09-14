@@ -1,5 +1,3 @@
-version: '3.8'
-
 # AbsenTray V2 — deployment single-container (API + frontend statis).
 # Target: Ubuntu + Docker / CasaOS.
 #
