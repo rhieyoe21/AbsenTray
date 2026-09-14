@@ -1,13 +1,34 @@
-const dotenv = require('dotenv');
+const fs = require('fs');
 const path = require('path');
 
-// override ensures .env values win even when the shell exposes an empty variable
-dotenv.config({ path: path.join(__dirname, '../..', '.env'), override: true });
+// Load .env hanya untuk variabel yang belum terisi (undefined/empty).
+// Dengan ini: di local dev .env menang atas env kosong dari shell, sedangkan
+// di container nilai env (docker-compose) tetap menang atas file .env —
+// mengikuti twelve-factor.
+function loadEnvFile(envPath) {
+  try {
+    const raw = fs.readFileSync(envPath, 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!m) continue;
+      const key = m[1];
+      const val = m[2].replace(/^['"]|['"]$/g, '');
+      const cur = process.env[key];
+      if (cur === undefined || cur === '') process.env[key] = val;
+    }
+  } catch (e) { /* file .env tidak ada — abaikan */ }
+}
+loadEnvFile(path.join(__dirname, '../..', '.env'));
 
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT) || 5000,
   host: process.env.HOST || '0.0.0.0',
+  
+  // Serve the built frontend (client/dist) from the same API server.
+  // Enabled automatically in production unless SERVE_CLIENT=0.
+  serveClient: process.env.SERVE_CLIENT === '1' ||
+    (process.env.NODE_ENV === 'production' && process.env.SERVE_CLIENT !== '0'),
   
   database: {
     path: process.env.DB_PATH || './data/attendance.db'

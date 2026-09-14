@@ -1,0 +1,56 @@
+version: '3.8'
+
+# AbsenTray V2 — deployment single-container (API + frontend statis).
+# Target: Ubuntu + Docker / CasaOS.
+#
+# Penggunaan:
+#   cp deploy/docker.env.example .env        # lalu edit nilai
+#   docker compose up -d --build
+#
+# Data persisten & impor awal:
+#   ./data/          → database SQLite
+#   ./logs/          → log aplikasi
+#   ./backups/       → backup periodik
+#   ./map_user.csv   → (opsional) impor karyawan saat start
+#   ./sent_log.txt   → (opsional) migrasi riwayat terkirim
+#
+# Akses:  http://<HOST>:5000
+
+services:
+  absentray:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: absentray:local
+    container_name: absentray
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - SERVE_CLIENT=1
+      - PORT=5000
+      - FINGERPRINT_IP=${FINGERPRINT_IP:-192.168.1.102}
+      - FINGERPRINT_PORT=${FINGERPRINT_PORT:-4370}
+      - FINGERPRINT_TIMEOUT=${FINGERPRINT_TIMEOUT:-10000}
+      - POLLING_INTERVAL=${POLLING_INTERVAL:-30000}
+      - WAHA_URL=${WAHA_URL:-http://192.168.1.180:5555}
+      - WAHA_API_KEY=${WAHA_API_KEY:-}
+      - WAHA_SESSION=${WAHA_SESSION:-default}
+      - ADMIN_WHATSAPP=${ADMIN_WHATSAPP:-628XXXXXXXXXX}
+      # CORS: '*' berarti izinkan akses dari IP/domain mana pun (disarankan utk
+      # akses langsung. Ganti dgn origin spesifik jika perlu.
+      - CLIENT_URL=${CLIENT_URL:-*}
+    volumes:
+      - ./data:/app/server/data
+      - ./logs:/app/server/logs
+      - ./backups:/app/server/backups
+      # Opsional: data untuk impor saat container start
+      - ./map_user.csv:/app/server/map_user.csv:ro
+      - ./sent_log.txt:/app/server/sent_log.txt:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

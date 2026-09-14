@@ -1,5 +1,7 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const socketIO = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -11,21 +13,31 @@ const logger = require('./src/utils/logger');
 const errorHandler = require('./src/middleware/errorHandler');
 const schedulerService = require('./src/services/scheduler.service');
 
+// Support: single origin, comma-separated list, or '*' (allow all).
+function resolveCorsOrigin(raw) {
+  if (!raw) return false;
+  const trimmed = raw.trim();
+  if (trimmed === '*') return true;
+  if (trimmed.includes(',')) return trimmed.split(',').map((s) => s.trim());
+  return trimmed;
+}
+
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
+const corsOrigin = resolveCorsOrigin(config.cors.origin);
 const io = socketIO(server, {
   cors: {
-    origin: config.cors.origin,
+    origin: corsOrigin,
     methods: ["GET", "POST"]
   }
 });
 
 // Middleware
-app.use(helmet()); // Security headers
+app.use(helmet({ contentSecurityPolicy: false })); // Security headers
 app.use(compression()); // Gzip compression
 app.use(cors({
-  origin: config.cors.origin,
+  origin: corsOrigin,
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' })); // JSON body parsing
@@ -49,9 +61,24 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    environment: config.env
+    environment: config.env,
+    serveClient: config.serveClient
   });
 });
+
+// Single-container deployment: serve the built frontend from this API app.
+if (config.serveClient) {
+  const distDir = path.join(__dirname, '..', 'client', 'dist');
+  if (fs.existsSync(distDir)) {
+    app.use(express.static(distDir));
+    app.get(/^(?!\/api|\/health|\/socket\.io).*/, (req, res) => {
+      res.sendFile(path.join(distDir, 'index.html'));
+    });
+    logger.info(`Serving client build from: ${distDir}`);
+  } else {
+    logger.warn(`SERVE_CLIENT aktif tetapi ${distDir} tidak ditemukan — frontend tidak dilayani.`);
+  }
+}
 
 // Load persisted settings from database (overrides .env)
 config.loadFromDatabase();

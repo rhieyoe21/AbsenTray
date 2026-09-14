@@ -1,0 +1,33 @@
+# Dependencies & build
+**/node_modules
+client/dist
+server/dist
+
+# Git + tooling
+.git
+.gitignore
+*.swp
+.idea
+.vscode
+
+# Dokumen tidak masuk image (hemat ukuran)
+docs
+
+# Data produksi & secret (jangan pernah masuk image)
+server/.env
+server/.env.production
+**/.env
+!server/.env.example
+server/data
+server/logs
+server/backups
+server/map_user.csv
+server/sent_log.txt
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Env frontend (di-override saat build oleh Vite dari nilai server)
+client/.env
+client/.env.local

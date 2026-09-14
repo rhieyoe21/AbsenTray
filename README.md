@@ -92,6 +92,8 @@ npm run dev
 - [API Documentation](./docs/API.md)
 - [WAHA Integration](./docs/WAHA_INTEGRATION.md)
 - [Migration Guide](./docs/MIGRATION.md)
+- [Deployment (PM2/Ubuntu)](./docs/DEPLOYMENT.md)
+- [Deployment Docker & CasaOS](./docs/DEPLOYMENT_CASAOS.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
 
 ---
