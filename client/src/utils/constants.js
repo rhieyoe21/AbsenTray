@@ -1,6 +1,9 @@
-// API URL configuration
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-export const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
+// API URL configuration.
+// Default: relative path — mengikuti host/port yang dipakai membuka dashboard
+// (single-container: API & frontend berada di origin yang sama).
+// Override only via VITE_API_URL saat build utk origin terpisah.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+export const WS_BASE_URL = import.meta.env.VITE_WS_URL || '';
 
 // App constants
 export const APP_NAME = 'AbsenTray V2';

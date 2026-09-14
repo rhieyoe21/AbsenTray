@@ -9,12 +9,15 @@ let connectCount = 0
 export function getSocket() {
   if (socket) return socket
   
-  socket = io(WS_BASE_URL, {
+  const options = {
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
     reconnectionAttempts: Infinity,
     transports: ['websocket']
-  })
+  }
+  
+  // WS_BASE_URL kosong → sambung ke origin halaman berjalan (same-origin).
+  socket = WS_BASE_URL ? io(WS_BASE_URL, options) : io(options)
   
   socket.on('connect', () => console.log('[socket] connected'))
   socket.on('disconnect', (reason) => console.log('[socket] disconnected:', reason))
