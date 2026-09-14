@@ -61,7 +61,33 @@ class DashboardController {
       const stats = database.getAttendanceStats(date);
       
       // Format for Chart.js
+      // Binning per 10 menit, dipisah mode Masuk/Pulang (full day 00:00-23:50).
+      const buckets = [];
+      const masuk = [];
+      const pulang = [];
+      for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 60; m += 10) {
+          const key = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+          buckets.push(key);
+          masuk.push(0);
+          pulang.push(0);
+        }
+      }
+      (stats.tenMinutes || []).forEach((row) => {
+        const idx = buckets.indexOf(row.bucket);
+        if (idx === -1) return;
+        if (row.mode === 'Masuk') masuk[idx] = row.count;
+        else if (row.mode === 'Pulang') pulang[idx] = row.count;
+      });
+
       const chartData = {
+        tenMinutes: {
+          labels: buckets,
+          datasets: [
+            { label: 'Masuk', data: masuk, backgroundColor: 'rgba(21,128,61,0.7)' },
+            { label: 'Pulang', data: pulang, backgroundColor: 'rgba(161,98,7,0.7)' }
+          ]
+        },
         hourly: {
           labels: stats.hourly.map(h => `${h.hour}:00`),
           datasets: [{

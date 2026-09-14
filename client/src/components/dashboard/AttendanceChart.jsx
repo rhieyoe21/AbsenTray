@@ -27,30 +27,34 @@ export default function AttendanceChart() {
   const chartColors = isDark
     ? {
         primary: 'rgba(96, 165, 250, 0.8)',
-        secondary: 'rgba(52, 211, 153, 0.8)',
-        accent: 'rgba(252, 211, 77, 0.8)',
+        success: 'rgba(74, 222, 128, 0.85)',
+        warning: 'rgba(251, 191, 36, 0.85)',
         border: 'rgba(96, 165, 250, 1)'
       }
     : {
         primary: 'rgba(59, 130, 246, 0.8)',
-        secondary: 'rgba(16, 185, 129, 0.8)',
-        accent: 'rgba(245, 158, 11, 0.8)',
+        success: 'rgba(21, 128, 61, 0.8)',
+        warning: 'rgba(161, 98, 7, 0.8)',
         border: 'rgba(59, 130, 246, 1)'
       }
 
-  const hourlyData = chartData?.data?.hourly || { labels: [], datasets: [] }
+  const tenMinutes = chartData?.data?.tenMinutes || { labels: [], datasets: [] }
   const byModeData = chartData?.data?.byMode || { labels: [], datasets: [] }
+  const masukSeries = tenMinutes.datasets?.find((d) => d.label === 'Masuk')?.data || []
+  const pulangSeries = tenMinutes.datasets?.find((d) => d.label === 'Pulang')?.data || []
 
   const barOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
-        display: false
+        display: true,
+        labels: { color: isDark ? '#f9fafb' : '#1f2937', boxWidth: 14 }
       },
       title: {
         display: true,
-        text: 'Attendance by Hour',
+        text: 'Absensi tiap 10 menit — Masuk vs Pulang',
         color: isDark ? '#f9fafb' : '#1f2937',
         font: { size: 16, weight: 'bold' }
       }
@@ -62,7 +66,11 @@ export default function AttendanceChart() {
         grid: { color: isDark ? 'rgba(156, 163, 175, 0.2)' : 'rgba(107, 114, 128, 0.2)' }
       },
       x: {
-        ticks: { color: isDark ? '#9ca3af' : '#6b7280' },
+        ticks: {
+          color: isDark ? '#9ca3af' : '#6b7280',
+          maxTicksLimit: 24,
+          callback: (value, index) => (index % 3 === 0 ? tenMinutes.labels[index] : '')
+        },
         grid: { display: false }
       }
     }
@@ -78,7 +86,7 @@ export default function AttendanceChart() {
       },
       title: {
         display: true,
-        text: 'Distribution by Mode (Masuk/Pulang)',
+        text: 'Sebaran Masuk/Pulang',
         color: isDark ? '#f9fafb' : '#1f2937',
         font: { size: 16, weight: 'bold' }
       }
@@ -87,21 +95,31 @@ export default function AttendanceChart() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Hourly Bar Chart */}
+      {/* 10-minute bar chart — Masuk vs Pulang */}
       <div className="card bg-base-100 shadow-xl">
         <div className="card-body">
           <div className="h-72">
             <Bar
               data={{
-                labels: hourlyData.labels,
-                datasets: [{
-                  label: 'Attendance Count',
-                  data: hourlyData.datasets[0]?.data || [],
-                  backgroundColor: chartColors.primary,
-                  borderColor: chartColors.border,
-                  borderWidth: 2,
-                  borderRadius: 6
-                }]
+                labels: tenMinutes.labels,
+                datasets: [
+                  {
+                    label: 'Masuk',
+                    data: masukSeries,
+                    backgroundColor: chartColors.success,
+                    borderColor: chartColors.success,
+                    borderWidth: 1,
+                    borderRadius: 3
+                  },
+                  {
+                    label: 'Pulang',
+                    data: pulangSeries,
+                    backgroundColor: chartColors.warning,
+                    borderColor: chartColors.warning,
+                    borderWidth: 1,
+                    borderRadius: 3
+                  }
+                ]
               }}
               options={barOptions}
             />
@@ -119,9 +137,9 @@ export default function AttendanceChart() {
                 datasets: [{
                   data: byModeData.datasets[0]?.data || [],
                   backgroundColor: [
-                    chartColors.secondary,  // Masuk (green)
-                    chartColors.accent,     // Pulang (yellow)
-                    chartColors.primary,    // Lainnya (blue)
+                    chartColors.success,  // Masuk (green)
+                    chartColors.warning,  // Pulang (amber)
+                    chartColors.primary,  // Lainnya (blue)
                   ],
                   borderWidth: 2
                 }]

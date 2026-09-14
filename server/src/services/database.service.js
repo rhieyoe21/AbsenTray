@@ -255,11 +255,26 @@ class DatabaseService {
       ORDER BY hour
     `);
     
+    // Binning per 10 menit (WIB) + dipisah per mode (Masuk/Pulang).
+    const tenMinStmt = this.db.prepare(`
+      SELECT 
+        (strftime('%H', attendance_time, '+7 hours') ||
+         ':' ||
+         printf('%02d', (CAST(strftime('%M', attendance_time, '+7 hours') AS INTEGER) / 10) * 10)) AS bucket,
+        mode,
+        COUNT(*) AS count
+      FROM attendance 
+      WHERE ${dateFilter}
+      GROUP BY bucket, mode
+      ORDER BY bucket
+    `);
+    
     return {
       total: totalStmt.get(...params).count,
       byMode: byModeStmt.all(...params),
       byStatus: byStatusStmt.all(...params),
-      hourly: hourlyStmt.all(...params)
+      hourly: hourlyStmt.all(...params),
+      tenMinutes: tenMinStmt.all(...params)
     };
   }
   
