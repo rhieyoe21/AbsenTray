@@ -180,23 +180,37 @@ export default function Schedule() {
                 const dayLabels = daysArr.map((d) => DAYS.find((x) => x.value === d)?.label).filter(Boolean).join(', ')
 
                 return (
-                  <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-base-200">
+                  <div key={s.id} className={`flex items-center justify-between p-2 rounded-lg bg-base-200 ${s.is_active ? '' : 'opacity-60'}`}>
                     <div className="flex flex-col">
                       <span className="text-xs opacity-75">{dayLabels || '—'}</span>
                       <span className="font-mono text-sm">{s.start_time} - {s.end_time}</span>
                     </div>
-                    <div className="flex gap-1">
-                      <button
-                        className="btn btn-xs btn-ghost"
-                        title="Ubah"
-                        onClick={() => {
-                          setEditingSchedule(s)
-                          setScheduleForm({ id: s.id, days: daysArr.length ? daysArr : [1], start_time: s.start_time, end_time: s.end_time })
-                        }}
-                      ><PencilSquareIcon className="w-4 h-4" /></button>
-                      <button className="btn btn-xs btn-ghost text-error" title="Hapus" onClick={() => deleteSchedule.mutate(s.id)}>
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-sm toggle-success"
+                          checked={!!s.is_active}
+                          title={s.is_active ? 'Nonaktifkan jadwal ini' : 'Aktifkan jadwal ini'}
+                          onChange={() =>
+                            updateSchedule.mutate({ id: s.id, payload: { is_active: s.is_active ? 0 : 1 } })
+                          }
+                        />
+                        <span className="text-[10px] opacity-70">{s.is_active ? 'Aktif' : 'Nonaktif'}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          className="btn btn-xs btn-ghost"
+                          title="Ubah"
+                          onClick={() => {
+                            setEditingSchedule(s)
+                            setScheduleForm({ id: s.id, days: daysArr.length ? daysArr : [1], start_time: s.start_time, end_time: s.end_time })
+                          }}
+                        ><PencilSquareIcon className="w-4 h-4" /></button>
+                        <button className="btn btn-xs btn-ghost text-error" title="Hapus" onClick={() => deleteSchedule.mutate(s.id)}>
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )

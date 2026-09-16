@@ -8,26 +8,34 @@ import RecentActivity from '../components/dashboard/RecentActivity'
 import ControlPanel from '../components/dashboard/ControlPanel'
 import { useWebSocket } from '../hooks/useWebSocket'
 
-const WEEKDAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
-const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
-
 function Clock() {
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
-  const h = String(now.getHours()).padStart(2, '0')
-  const m = String(now.getMinutes()).padStart(2, '0')
-  const s = String(now.getSeconds()).padStart(2, '0')
-  const date = `${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`
+  // Format jam dinding Asia/Jakarta (WIB) — bukan TZ browser lokal.
+  const hh = (t) => String(Number(t) || 0).padStart(2, '0')
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(now).reduce((acc, p) => (acc[p.type] = p.value, acc), {})
+  const wibDate = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(now)
   return (
     <div className="text-left select-none">
       <div className="text-5xl sm:text-6xl font-semibold tracking-tight tabular-nums leading-none">
-        {h}:{m}:<span className="text-base-content/40">{s}</span>
+        {hh(parts.hour)}:{hh(parts.minute)}:<span className="text-base-content/40">{hh(parts.second)}</span>
       </div>
-      <div className="text-sm font-bold text-base-content/60 mt-2">{date}</div>
+      <div className="text-sm font-bold text-base-content/60 mt-2">{wibDate}</div>
     </div>
   )
 }

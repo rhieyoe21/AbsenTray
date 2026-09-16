@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     whatsapp_number TEXT NOT NULL,
     is_active BOOLEAN DEFAULT 1 CHECK (is_active IN (0, 1)),
+    notify_enabled BOOLEAN DEFAULT 1 CHECK (notify_enabled IN (0, 1)),
     created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
     updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
 );
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     whatsapp_number TEXT NOT NULL,
     attendance_time DATETIME NOT NULL,
     mode TEXT NOT NULL,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'retrying')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'retrying', 'skipped')),
     sent_at DATETIME,
     error_message TEXT,
     created_at DATETIME DEFAULT (datetime('now', '+7 hours')),

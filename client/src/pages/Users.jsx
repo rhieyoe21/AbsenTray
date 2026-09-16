@@ -10,7 +10,8 @@ const UserForm = ({ user, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     uid: user?.uid || '',
     name: user?.name || '',
-    whatsapp_number: user?.whatsapp_number || ''
+    whatsapp_number: user?.whatsapp_number || '',
+    notify_enabled: user?.notify_enabled !== 0 && user?.notify_enabled !== '0'
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -40,14 +41,16 @@ const UserForm = ({ user, onClose, onSave }) => {
       if (user) {
         await usersAPI.update(user.uid, {
           name: formData.name,
-          whatsapp_number: cleanNumber
+          whatsapp_number: cleanNumber,
+          notify_enabled: formData.notify_enabled ? 1 : 0
         })
         toast.success('User updated successfully')
       } else {
         await usersAPI.create({
           uid: formData.uid,
           name: formData.name,
-          whatsapp_number: cleanNumber
+          whatsapp_number: cleanNumber,
+          notify_enabled: formData.notify_enabled ? 1 : 0
         })
         toast.success('User created successfully')
       }
@@ -117,6 +120,22 @@ const UserForm = ({ user, onClose, onSave }) => {
               <span className="label-text-alt">Use international format with country code (62 for Indonesia)</span>
             </label>
           </div>
+
+          <div className="form-control">
+            <label className="label cursor-pointer justify-start gap-3">
+              <input
+                type="checkbox"
+                name="notify_enabled"
+                className="toggle toggle-success"
+                checked={formData.notify_enabled}
+                onChange={(e) => setFormData((prev) => ({ ...prev, notify_enabled: e.target.checked }))}
+              />
+              <div>
+                <span className="label-text font-medium">Kirim Notifikasi WhatsApp</span>
+                <p className="text-xs text-base-content/50">Jika nonaktif, absen tetap dicatat tapi tanpa kirim WhatsApp</p>
+              </div>
+            </label>
+          </div>
           
           <div className="modal-action">
             <button type="button" className="btn btn-ghost" onClick={onClose}>
@@ -160,6 +179,17 @@ export default function Users() {
     },
     onError: (error) => {
       toast.error(error.response?.data?.error?.message || 'Failed to delete user')
+    }
+  })
+
+  const toggleNotify = useMutation({
+    mutationFn: ({ uid, notify_enabled }) => usersAPI.update(uid, { notify_enabled }),
+    onSuccess: () => {
+      toast.success('Preferensi notifikasi diperbarui')
+      queryClient.invalidateQueries(['users'])
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error?.message || 'Gagal memperbarui notifikasi')
     }
   })
 
@@ -308,13 +338,14 @@ export default function Users() {
                   <th>UID</th>
                   <th>Name</th>
                   <th>WhatsApp</th>
+                  <th>Notifikasi WA</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-8 text-base-content/50">
+                    <td colSpan="6" className="text-center py-8 text-base-content/50">
                       No users found{search ? ' matching "' + search + '"' : ''}
                     </td>
                   </tr>
@@ -325,6 +356,16 @@ export default function Users() {
                       <td className="font-mono text-xs">{user.uid}</td>
                       <td className="font-medium">{user.name}</td>
                       <td className="font-mono text-xs">{user.whatsapp_number}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-sm toggle-success"
+                          checked={!!user.notify_enabled}
+                          title={user.notify_enabled ? 'Matikan notifikasi WhatsApp' : 'Aktifkan notifikasi WhatsApp'}
+                          disabled={toggleNotify.isPending}
+                          onChange={(e) => toggleNotify.mutate({ uid: user.uid, notify_enabled: e.target.checked ? 1 : 0 })}
+                        />
+                      </td>
                       <td className="text-right">
                         <div className="flex gap-1 justify-end">
                           <button

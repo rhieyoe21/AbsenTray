@@ -1,4 +1,5 @@
 const ZKLib = require('node-zklib');
+const moment = require('moment-timezone');
 const config = require('../config');
 const logger = require('../utils/logger');
 const database = require('./database.service');
@@ -34,10 +35,12 @@ function forceDestroySocket(conn) {
   }
 }
 
-// node-zklib mengembalikan jam device (waktu lokal — WIB) seolah-olah UTC.
-// Di server/container berzona UTC nilainya jadi +7 jam dari asli; koreksi ini
-// mengembalikan ke UTC yang benar (08:00 WIB → 01:00 UTC).
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+// node-zklib (utils.parseTimeToDate) membangun Date dari FIELD jam device
+// menggunakan konstruktor lokal server: `new Date(y, m, d, hh, mm, ss)`.
+// Akibatnya recordTime BUKAN instant mutlak — nilainya bergeser tergantung
+// TZ server (container UTC vs mesin dev WIB). Perbaikan transformLog
+// menginterpretasikan jam dinding device sebagai Asia/Jakarta secara
+// eksplisit, sehingga hasilnya benar di TZ server mana pun.
 
 class FingerprintService extends EventEmitter {
   constructor() {
@@ -90,15 +93,18 @@ class FingerprintService extends EventEmitter {
 
   // Evaluate whether current time falls inside any active polling schedule.
   // Returns true when schedules table is empty (polling allowed anytime) unless schedule mode forced off.
+  // Selalu dievaluasi dalam zona waktu lokal (Asia/Jakarta / config.timezone),
+  // bukan timezone server/container yang sering kali UTC+0.
   isInSchedule() {
     try {
       if (!this.scheduleEnabled) return true; // manual toggle takes precedence when off
       const schedules = database.getActivePollingSchedules();
       if (schedules.length === 0) return false; // schedules configured but none active
       
-      const now = new Date();
-      const day = now.getDay(); // 0=Sunday ... 6=Saturday
-      const cur = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const tz = config.timezone || 'Asia/Jakarta';
+      const now = moment().tz(tz);
+      const day = now.day(); // 0=Sunday ... 6=Saturday
+      const cur = now.format('HH:mm');
       
       return schedules.some(s => {
         // Multi-day schedules: `days` JSON array, fallback to single day_of_week
@@ -585,23 +591,36 @@ class FingerprintService extends EventEmitter {
     logger.info('Fingerprint polling stopped');
   }
 
-  // node-zklib mengembalikan jam device (waktu lokal — WIB) seolah-olah UTC;
-  // dikoreksi di transformLog (offset WIB didefinisikan module-scope di atas).
+  // Interpretasikan field jam/menit/detik device sebagai jam dinding Asia/Jakarta
+  // secara eksplisit agar bebas dari TZ server tempat Node berjalan.
   transformLog(log) {
     let ts = log.recordTime || Date.now();
     let date = ts instanceof Date ? ts
       : typeof ts === 'number' ? new Date(ts * 1000)
       : new Date(ts);
-    
-    // Map node-zklib log format to our format
-    const record = {
+
+    let timestamp;
+    if (ts instanceof Date) {
+      // Ambil jam dinding device (get* membaca angka lokal yang tadi dipasang oleh parseTimeToDate)
+      const tz = config.timezone || 'Asia/Jakarta';
+      timestamp = moment.tz([
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate(),
+        date.getHours(),
+        date.getMinutes(),
+        date.getSeconds()
+      ], tz).toDate();
+    } else {
+      timestamp = date;
+    }
+
+    return {
       deviceIp: log.deviceIp || log.ip,
       userId: log.deviceUserId || log.userSn,
-      timestamp: new Date(date.getTime() - WIB_OFFSET_MS),
+      timestamp,
       raw: log
     };
-    
-    return record;
   }
 
   // Apply runtime configuration changes from Settings page.

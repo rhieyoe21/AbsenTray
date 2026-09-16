@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const moment = require('moment-timezone');
 
 // Load .env hanya untuk variabel yang belum terisi (undefined/empty).
 // Dengan ini: di local dev .env menang atas env kosong dari shell, sedangkan
@@ -24,6 +25,7 @@ const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT) || 5000,
   host: process.env.HOST || '0.0.0.0',
+  timezone: process.env.APP_TIMEZONE || process.env.TZ || 'Asia/Jakarta',
   
   // Serve the built frontend (client/dist) from the same API server.
   // Enabled automatically in production unless SERVE_CLIENT=0.
@@ -118,6 +120,13 @@ function loadFromDatabase() {
   }
 }
 
+// SQLite modifier string (e.g. '+420 minutes') to shift UTC 'now' to local timezone.
+function sqliteLocalNowModifier() {
+  const off = moment.tz(config.timezone || 'Asia/Jakarta').utcOffset();
+  const sign = off >= 0 ? '+' : '-';
+  return `${sign}${Math.abs(off)} minutes`;
+}
+
 // Persist a runtime config change into the settings table.
 function saveToDatabase(db) {
   const entries = [
@@ -133,9 +142,10 @@ function saveToDatabase(db) {
     ['retry_delays', config.retry.delays.join(',')]
   ];
   
+  const modifier = sqliteLocalNowModifier();
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO settings (key, value, updated_at)
-    VALUES (?, ?, datetime('now'))
+    VALUES (?, ?, datetime('now', '${modifier}'))
   `);
   
   const insertAll = db.transaction((list) => {
@@ -147,5 +157,6 @@ function saveToDatabase(db) {
 }
 
 module.exports = config;
+module.exports.sqliteLocalNowModifier = sqliteLocalNowModifier;
 module.exports.loadFromDatabase = loadFromDatabase;
 module.exports.saveToDatabase = saveToDatabase;

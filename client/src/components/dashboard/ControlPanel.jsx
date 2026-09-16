@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { settingsAPI } from '../../services/api'
+import { formatDateTime, formatTimeOnly } from '../../utils/format'
 
 export default function ControlPanel() {
   const queryClient = useQueryClient()
@@ -27,6 +28,70 @@ export default function ControlPanel() {
   const scheduleEnabled = settings.schedule_enabled
     ? settings.schedule_enabled === '1'
     : !!device.scheduleEnabled
+
+  const activeSchedules = scheduleEnabled
+    ? (settingsData?.data?.schedules || []).filter((s) => !!s.is_active)
+    : []
+
+  // Cari jadwal aktif berikutnya dalam jam dinding Asia/Jakarta (bukan TZ browser).
+  const findNextSchedule = () => {
+    if (!scheduleEnabled || activeSchedules.length === 0) return null
+    const wallParts = (d) => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(d).reduce((a, p) => (a[p.type] = p.value, a), {})
+    const nowParts = wallParts(new Date())
+    const now = new Date(`${nowParts.year}-${nowParts.month}-${nowParts.day}T${nowParts.hour}:${nowParts.minute}:${nowParts.second}+07:00`)
+    for (let i = 0; i < 8; i++) {
+      const day = new Date(now.getTime() + i * 86400000)
+      const dp = wallParts(day)
+      const dow = new Date(`${dp.year}-${dp.month}-${dp.day}T00:00:00+00:00`).getUTCDay()
+      for (const s of activeSchedules) {
+        let days = []
+        if (s.days) { try { days = JSON.parse(s.days) } catch { days = [] } }
+        if (days.length === 0 && s.day_of_week !== null && s.day_of_week !== undefined) days = [s.day_of_week]
+        if (!days.includes(dow)) continue
+        const candidate = new Date(`${dp.year}-${dp.month}-${dp.day}T${s.start_time}:00+07:00`)
+        if (candidate > now) return candidate
+      }
+    }
+    return null
+  }
+
+  // Bacaan status polling dinamis — apakah sedang polling atau polling ditunda.
+  const pollingNote = (() => {
+    if (!pollEnabled) {
+      return { tone: 'text-base-content/50', text: 'Polling dinonaktifkan.' }
+    }
+    if (device.manualDisconnected) {
+      return { tone: 'text-warning', text: 'Koneksi diputus manual — polling ditunda.' }
+    }
+    if (!scheduleEnabled) {
+      return {
+        tone: device.deviceOnline ? 'text-success' : 'text-warning',
+        text: device.deviceOnline
+          ? 'Sedang melakukan polling (mode bebas jadwal 24/7).'
+          : 'Polling aktif (24/7) — menunggu perangkat terhubung.'
+      }
+    }
+    if (device.inSchedule) {
+      return {
+        tone: device.deviceOnline ? 'text-success' : 'text-warning',
+        text: device.deviceOnline
+          ? 'Sedang melakukan polling (jadwal aktif).'
+          : 'Jadwal aktif — menunggu perangkat terhubung.'
+      }
+    }
+    const next = findNextSchedule()
+    return {
+      tone: 'text-warning',
+      text: next
+        ? `Di luar jam jadwal — polling ditunda. Jadwal berikutnya: ${formatDateTime(next)}`
+        : 'Tidak ada jadwal aktif — polling ditunda.'
+    }
+  })()
 
   const togglePolling = useMutation({
     mutationFn: (enabled) => settingsAPI.setPolling(enabled),
@@ -110,8 +175,8 @@ export default function ControlPanel() {
             onChange={(e) => togglePolling.mutate(e.target.checked)}
           />
         </div>
-        {pollEnabled && device.inSchedule === false && (
-          <p className="text-xs text-warning">Di luar jam jadwal — polling menunggu jam aktif.</p>
+        {pollingNote && (
+          <p className={`text-xs ${pollingNote.tone}`}>{pollingNote.text}</p>
         )}
       </div>
 
@@ -202,7 +267,7 @@ export default function ControlPanel() {
           <span className="text-base-content/70">Polling terakhir</span>
           <span className="tabular-nums text-base-content/80">
             {device.lastPollTime
-              ? new Date(device.lastPollTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              ? formatTimeOnly(device.lastPollTime)
               : '—'}
           </span>
         </div>

@@ -32,14 +32,14 @@ export function useWebSocket() {
     const offOffline = onSocketEvent('device:offline', (data) => {
       setDeviceEvents((prev) => [
         ...prev,
-        { ...data, type: 'offline', timestamp: new Date().toLocaleString('id-ID') }
+        { ...data, type: 'offline', timestamp: new Date().toISOString() }
       ])
     })
 
     const offRecovered = onSocketEvent('device:recovered', (data) => {
       setDeviceEvents((prev) => [
         ...prev,
-        { ...data, type: 'recovered', timestamp: new Date().toLocaleString('id-ID') }
+        { ...data, type: 'recovered', timestamp: new Date().toISOString() }
       ])
     })
 

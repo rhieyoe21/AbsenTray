@@ -4,6 +4,7 @@ import { dashboardAPI } from '../services/api'
 import { useWebSocket } from '../hooks/useWebSocket'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import DeviceStatus from '../components/dashboard/DeviceStatus'
+import { formatDateTime } from '../utils/format'
 
 export default function Monitoring() {
   const { isConnected, attendanceEvents, deviceEvents } = useWebSocket()
@@ -27,16 +28,6 @@ export default function Monitoring() {
     : Array.isArray(retryQueue?.data)
       ? retryQueue.data
       : []
-
-  const fmtDateTime = (t) => {
-    try {
-      return new Date(String(t).replace(' ', 'T') + (typeof t === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t) ? 'Z' : '')).toLocaleString('id-ID', {
-        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit'
-      })
-    } catch {
-      return '—'
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -88,13 +79,15 @@ export default function Monitoring() {
                       <div>
                         <span className="font-medium">{event.userName}</span>
                         <span className="text-xs pl-2">
-                          {fmtDateTime(event.time)}
+                          {formatDateTime(event.time)}
                         </span>
                       </div>
                       <span className={`badge badge-sm ${
-                        event.status === 'sent' ? 'badge-success' : 'badge-warning'
+                        event.status === 'sent' ? 'badge-success' :
+                        event.status === 'skipped' ? 'badge-neutral' : 'badge-warning'
                       }`}>
-                        {event.status === 'sent' ? 'Terkirim' : 'Menunggu'}
+                        {event.status === 'sent' ? 'Terkirim' :
+                         event.status === 'skipped' ? 'Dilewati' : 'Menunggu'}
                       </span>
                     </div>
                     <p className="text-xs opacity-75 mt-1">
@@ -128,7 +121,7 @@ export default function Monitoring() {
                         {event.type}
                       </span>
                       <span className="text-xs font-mono opacity-75">
-                        {event.timestamp || '—'}
+                        {formatDateTime(event.timestamp)}
                       </span>
                     </div>
                     {event.error && (
@@ -173,7 +166,7 @@ export default function Monitoring() {
                         <td>{index + 1}</td>
                         <td className="font-mono text-xs">{item.whatsapp_number}</td>
                         <td>{item.attempt} / {item.max_attempts}</td>
-                        <td className="font-mono text-xs">{fmtDateTime(item.next_retry_at)}</td>
+                        <td className="font-mono text-xs">{formatDateTime(item.next_retry_at)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -207,7 +200,7 @@ export default function Monitoring() {
                 <tbody>
                   {(deviceLogs?.data?.recentLogs || []).slice(0, 20).map((log) => (
                     <tr key={log.id}>
-                      <td className="font-mono text-xs">{fmtDateTime(log.created_at)}</td>
+                      <td className="font-mono text-xs">{formatDateTime(log.created_at)}</td>
                       <td className="font-mono text-xs">{log.device_ip}</td>
                       <td>
                         <span className={`badge badge-sm ${

@@ -1,6 +1,7 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardAPI } from '../../services/api'
+import { formatTimeOnly } from '../../utils/format'
 
 export default function DeviceStatus() {
   const { data, isLoading } = useQuery({
@@ -40,7 +41,7 @@ export default function DeviceStatus() {
           <div className="stat-title">Last Poll</div>
           <div className="stat-value text-xl font-mono">
             {status.lastPollTime 
-              ? new Date(status.lastPollTime).toLocaleTimeString('id-ID')
+              ? formatTimeOnly(status.lastPollTime)
               : 'N/A'}
           </div>
         </div>
@@ -81,7 +82,7 @@ export default function DeviceStatus() {
                     {log.status}
                   </span>
                   <span className="font-mono opacity-50">
-                    {new Date(log.created_at).toLocaleTimeString('id-ID')}
+                    {formatTimeOnly(log.created_at)}
                   </span>
                 </div>
                 <p className="mt-1 opacity-75">{log.message}</p>

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const moment = require('moment-timezone');
 const config = require('../config');
 
 // Ensure logs directory exists
@@ -29,7 +30,8 @@ class Logger {
   }
 
   formatTimestamp() {
-    return new Date().toISOString();
+    const tz = config.timezone || 'Asia/Jakarta';
+    return moment().tz(tz).format('YYYY-MM-DD HH:mm:ss.SSS');
   }
 
   formatMessage(level, message, meta = {}) {
@@ -82,7 +84,8 @@ class Logger {
       if (fs.existsSync(this.logFile)) {
         const stats = fs.statSync(this.logFile);
         if (stats.size > maxSize) {
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const tz = config.timezone || 'Asia/Jakarta';
+          const timestamp = moment().tz(tz).format('YYYYMMDD-HHmmss');
           const rotatedFile = `${this.logFile}.${timestamp}`;
           fs.renameSync(this.logFile, rotatedFile);
           this.info('Log file rotated', { from: this.logFile, to: rotatedFile });

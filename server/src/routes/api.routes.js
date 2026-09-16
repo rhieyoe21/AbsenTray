@@ -23,6 +23,7 @@ router.use(apiLimiter);
 router.get('/attendance', attendanceController.getAttendance);
 router.get('/attendance/stats/today', attendanceController.getAttendanceStats);
 router.get('/attendance/:id', attendanceController.getAttendanceById);
+router.post('/attendance/bulk-status', attendanceController.bulkSetStatus);
 router.post('/attendance/:id/resend', attendanceController.resendAttendance);
 router.get('/attendance/date/:date', attendanceController.getAttendanceByDate);
 router.post('/attendance/manual', attendanceController.createManualAttendance);

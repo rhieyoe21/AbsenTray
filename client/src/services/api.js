@@ -46,7 +46,9 @@ export const attendanceAPI = {
   getById: (id) => api.get(`/attendance/${id}`),
   getByDate: (date) => api.get(`/attendance/date/${date}`),
   createManual: (data) => api.post('/attendance/manual', data),
-  resend: (id) => api.post(`/attendance/${id}/resend`)
+  resend: (id) => api.post(`/attendance/${id}/resend`),
+  bulkSetStatus: (ids, status) => api.post('/attendance/bulk-status', { ids, status }),
+  bulkSetStatusFilter: (filter, status) => api.post('/attendance/bulk-status', { filter, status })
 };
 
 export const usersAPI = {

@@ -64,7 +64,7 @@ class UsersController {
 
   async createUser(req, res, next) {
     try {
-      const { uid, name, whatsapp_number, is_active = 1 } = req.body;
+      const { uid, name, whatsapp_number, is_active = 1, notify_enabled = 1 } = req.body;
       
       if (!uid || !name || !whatsapp_number) {
         return res.status(400).json({
@@ -73,9 +73,9 @@ class UsersController {
         });
       }
       
-      const result = database.createUser({ uid, name, whatsapp_number, is_active });
+      const result = database.createUser({ uid, name, whatsapp_number, is_active, notify_enabled });
       
-      logger.info('User created', { uid, name });
+      logger.info('User created', { uid, name, notify_enabled });
       
       res.status(201).json({
         success: true,
@@ -84,7 +84,8 @@ class UsersController {
           uid,
           name,
           whatsapp_number,
-          is_active
+          is_active,
+          notify_enabled
         }
       });
     } catch (error) {
@@ -95,9 +96,9 @@ class UsersController {
   async updateUser(req, res, next) {
     try {
       const { uid } = req.params;
-      const { name, whatsapp_number, is_active } = req.body;
+      const { name, whatsapp_number, is_active, notify_enabled } = req.body;
       
-      const result = database.updateUser(uid, { name, whatsapp_number, is_active });
+      const result = database.updateUser(uid, { name, whatsapp_number, is_active, notify_enabled });
       
       logger.info('User updated', { uid, changes: result.changes });
       
@@ -187,7 +188,9 @@ class UsersController {
           }
           seenUid.add(uid);
           
-          const existing = database.getUser(uid);
+          // getUser() hanya mengembalikan user aktif — pakai varian termasuk
+          // nonaktif agar user soft-delete tetap bisa dire-aktifkan saat impor.
+          const existing = database.getUserIncludingInactive(uid);
           if (existing && existing.is_active === 1) {
             skipped.push({ uid, reason: `UID ${uid} sudah ada` });
             return;

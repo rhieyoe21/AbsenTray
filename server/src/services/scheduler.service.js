@@ -10,7 +10,37 @@ const alertService = require('./alert.service');
 const { EventEmitter } = require('events');
 
 // per-minute clock helper (WIB)
-const ZONE = 'Asia/Jakarta';
+const ZONE = config.timezone || 'Asia/Jakarta';
+
+// node-cron menembak pakai jam server/container (sering UTC+0), bukan zona
+// lokal. Ekspresi cron yang ditulis utk jam WIB perlu digeser sesuai selisih
+// offset agar tetap berjalan pd jam lokal yang dimaksud. Mendukung bentuk
+// '<menit> <jam> * * <hari>' dan meneruskan ekspresi '*'-jam (tiap menit/jam).
+function cronZoneToLocal(expr, zone = ZONE) {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return expr;
+  const [minute, hour, dom, month] = parts;
+  let dow = parts[4];
+
+  // Khusus step/minute (mis. '*/1', '*/5') tak perlu pergeseran jam.
+  if (hour === '*' || dow === '*') return expr;
+  if (!/^\d+$/.test(hour) || !/^\d+$/.test(minute) || !/^\d+$/.test(dom) && dom !== '*' || !/^\d+$/.test(month) && month !== '*') return expr;
+
+  const totalMin = parseInt(hour, 10) * 60 + parseInt(minute, 10);
+  const shift = moment().utcOffset() - moment.tz(zone).utcOffset(); // menit
+  const shifted = totalMin + shift;
+  const dayDelta = Math.floor(shifted / 1440);
+  const rem = ((shifted % 1440) + 1440) % 1440;
+  const newHour = Math.floor(rem / 60);
+  const newMinute = rem % 60;
+
+  if (dow !== '*' && /^\d+$/.test(dow)) {
+    const d = (parseInt(dow, 10) + dayDelta + 7) % 7; // 0=Sunday
+    dow = String(d);
+  }
+
+  return `${newMinute} ${newHour} ${dom} ${month} ${dow}`;
+}
 
 class SchedulerService extends EventEmitter {
   constructor() {
@@ -132,6 +162,23 @@ class SchedulerService extends EventEmitter {
         mode,
         status: 'pending'
       };
+
+      // Notifikasi WhatsApp user dimatikan: absen tetap dicatat (status 'skipped')
+      // tapi tidak ada pesan terkirim dan tidak masuk retry queue.
+      if (user.notify_enabled === 0) {
+        attendanceData.status = 'skipped';
+        database.createAttendance(attendanceData);
+        logger.info(`Attendance recorded WITHOUT WhatsApp (notify disabled): ${user.name} (${mode})`, { transactionId });
+        this.emit('attendance:new', {
+          transactionId,
+          userId: user.uid,
+          userName: user.name,
+          mode,
+          time: timestamp,
+          status: 'skipped'
+        });
+        return;
+      }
       
       database.createAttendance(attendanceData);
       
@@ -359,7 +406,9 @@ class SchedulerService extends EventEmitter {
   }
 
   startDailyMaintenance() {
-    const job = cron.schedule('0 2 * * *', () => {
+    const cronExpr = cronZoneToLocal('0 2 * * *', ZONE);
+    logger.info(`Scheduling daily maintenance: "${cronExpr}" (target 02:00 ${ZONE})`);
+    const job = cron.schedule(cronExpr, () => {
       logger.info('Running daily maintenance');
       
       // Bersihkan log device yang lebih lama dari batas retensi (hari).
@@ -378,10 +427,13 @@ class SchedulerService extends EventEmitter {
   }
 
   startDatabaseBackup() {
-    const job = cron.schedule('0 3 * * 0', () => {
+    const cronExpr = cronZoneToLocal('0 3 * * 0', ZONE);
+    logger.info(`Scheduling weekly database backup: "${cronExpr}" (target Sun 03:00 ${ZONE})`);
+    const job = cron.schedule(cronExpr, () => {
       logger.info('Running weekly database backup');
       
-      const backupPath = `./backups/attendance_${new Date().toISOString().replace(/[:.]/g, '-')}.db`;
+      const ts = moment().tz(ZONE).format('YYYYMMDD-HHmmss');
+      const backupPath = `./backups/attendance_${ts}.db`;
       
       database.backupDatabase(backupPath);
     });

@@ -1,15 +1,17 @@
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { dashboardAPI } from '../../services/api'
+import { formatDateTime } from '../../utils/format'
 
 const StatusBadge = ({ status }) => {
   const styles = {
     sent: 'badge-success',
     pending: 'badge-warning',
     failed: 'badge-error',
-    retrying: 'badge-info'
+    retrying: 'badge-info',
+    skipped: 'badge-neutral'
   }
-  const labels = { sent: 'Terkirim', pending: 'Menunggu', failed: 'Gagal', retrying: 'Kirim ulang' }
+  const labels = { sent: 'Terkirim', pending: 'Menunggu', failed: 'Gagal', retrying: 'Kirim ulang', skipped: 'Dilewati' }
   
   return (
     <span className={`badge badge-sm ${styles[status] || 'badge-neutral'}`}>
@@ -77,13 +79,7 @@ export default function RecentActivity({ limit = 10 }) {
             <tr key={activity.id} className="hover">
               <td>{index + 1}</td>
               <td className="font-mono text-xs">
-                {new Date(activity.attendance_time).toLocaleString('id-ID', {
-                  day: '2-digit',
-                  month: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                })}
+                {formatDateTime(activity.attendance_time)}
               </td>
               <td className="font-medium">{activity.user_name}</td>
               <td className="font-mono text-xs">{activity.user_id}</td>

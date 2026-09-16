@@ -2,6 +2,11 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const config = require('../config');
 
+// SQLite modifier untuk timestamp lokal (mis. '+420 minutes' untuk Asia/Jakarta).
+// Semua created_at/updated_at/sent_at diisi pakai ini — kecuali attendance_time
+// yang sengaja dibiarkan apa adanya (absolut dari mesin) agar tetap akurat.
+const LOCAL_MODIFIER = config.sqliteLocalNowModifier();
+
 // Normalize a `days` array ([0..6], 0=Sunday) into a JSON string for storage.
 // Returns null when input is empty/undefined (fallback to day_of_week).
 function normalizeDays(days) {
@@ -33,15 +38,82 @@ class DatabaseService {
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('foreign_keys = ON');
       
+      this._runIdempotentMigrations();
+      
       console.log('Database connection established');
     } catch (error) {
       console.error('Failed to connect to database:', error);
       throw error;
     }
   }
+
+  // Migrasi kecil yang aman dijalankan ulang: menambah kolom baru & melonggarkan
+  // CHECK constraint status tanpa migrasi versi penuh.
+  _runIdempotentMigrations() {
+    // 1) users.notify_enabled — toggle kirim notifikasi WhatsApp per user.
+    const userCols = this.db.prepare('PRAGMA table_info(users)').all();
+    if (!userCols.some((c) => c.name === 'notify_enabled')) {
+      this.db.prepare(`
+        ALTER TABLE users
+        ADD COLUMN notify_enabled INTEGER NOT NULL DEFAULT 1 CHECK (notify_enabled IN (0, 1))
+      `).run();
+      console.log('Migration: users.notify_enabled ditambahkan');
+    }
+    
+    // 2) attendance.status harus menerima 'skipped' (absen tercatat tapi WA
+    //    sengaja tidak dikirim). Hanya perlu rebuild bila tabel lama punya CHECK.
+    const attTable = this.db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'attendance'"
+    ).get();
+    const attSql = attTable?.sql || '';
+    if (/CHECK\s*\(status\s*IN/i.test(attSql) && !/skipped/.test(attSql)) {
+      const fkBefore = !!this.db.pragma('foreign_keys', { simple: true });
+      this.db.pragma('foreign_keys = OFF');
+      const rebuild = this.db.transaction(() => {
+        this.db.exec(`
+          CREATE TABLE attendance_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transaction_id TEXT UNIQUE NOT NULL,
+            user_id TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            whatsapp_number TEXT NOT NULL,
+            attendance_time DATETIME NOT NULL,
+            mode TEXT NOT NULL,
+            status TEXT DEFAULT 'pending'
+              CHECK (status IN ('pending', 'sent', 'failed', 'retrying', 'skipped')),
+            sent_at DATETIME,
+            error_message TEXT,
+            created_at DATETIME DEFAULT (datetime('now', '${LOCAL_MODIFIER}')),
+            FOREIGN KEY (user_id) REFERENCES users(uid) ON DELETE RESTRICT
+          );
+          INSERT INTO attendance_new
+            (id, transaction_id, user_id, user_name, whatsapp_number, attendance_time,
+             mode, status, sent_at, error_message, created_at)
+          SELECT id, transaction_id, user_id, user_name, whatsapp_number, attendance_time,
+                 mode, status, sent_at, error_message, created_at FROM attendance;
+          DROP TABLE attendance;
+          ALTER TABLE attendance_new RENAME TO attendance;
+          CREATE INDEX IF NOT EXISTS idx_attendance_time ON attendance(attendance_time);
+          CREATE INDEX IF NOT EXISTS idx_attendance_status ON attendance(status);
+          CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
+        `);
+      });
+      rebuild();
+      this.db.pragma(`foreign_keys = ${fkBefore ? 'ON' : 'OFF'}`);
+      console.log('Migration: attendance.status kini mendukung "skipped"');
+    }
+  }
   
   // Users operations
   getUser(uid) {
+    // Hanya user AKTIF. User yang di-soft-delete (is_active=0) tidak boleh
+    // dipakai sebagai penerima absen/notifikasi baru.
+    const stmt = this.db.prepare('SELECT * FROM users WHERE uid = ? AND is_active = 1');
+    return stmt.get(uid);
+  }
+
+  // Untuk keperluan khusus (mis. impor ulang): temukan user walau nonaktif.
+  getUserIncludingInactive(uid) {
     const stmt = this.db.prepare('SELECT * FROM users WHERE uid = ?');
     return stmt.get(uid);
   }
@@ -57,14 +129,14 @@ class DatabaseService {
   }
   
   createUser(data) {
-    const { uid, name, whatsapp_number, is_active = 1 } = data;
+    const { uid, name, whatsapp_number, is_active = 1, notify_enabled = 1 } = data;
     const stmt = this.db.prepare(`
-      INSERT INTO users (uid, name, whatsapp_number, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
+      INSERT INTO users (uid, name, whatsapp_number, is_active, notify_enabled, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '${LOCAL_MODIFIER}'), datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     try {
-      const result = stmt.run(uid, name, whatsapp_number, is_active);
+      const result = stmt.run(uid, name, whatsapp_number, is_active, notify_enabled);
       return { id: result.lastInsertRowid };
     } catch (error) {
       if (error.code === 'SQLITE_CONSTRAINT') {
@@ -83,7 +155,7 @@ class DatabaseService {
       SET is_active = 1,
           name = COALESCE(?, name),
           whatsapp_number = COALESCE(?, whatsapp_number),
-          updated_at = datetime('now', '+7 hours')
+          updated_at = datetime('now', '${LOCAL_MODIFIER}')
       WHERE uid = ?
     `);
     const result = stmt.run(name ?? null, whatsapp_number ?? null, uid);
@@ -91,7 +163,7 @@ class DatabaseService {
   }
   
   updateUser(uid, data) {
-    const { name, whatsapp_number, is_active } = data;
+    const { name, whatsapp_number, is_active, notify_enabled } = data;
     const fields = [];
     const values = [];
     
@@ -105,14 +177,18 @@ class DatabaseService {
     }
     if (is_active !== undefined) {
       fields.push('is_active = ?');
-      values.push(is_active);
+      values.push(is_active ? 1 : 0);
+    }
+    if (notify_enabled !== undefined) {
+      fields.push('notify_enabled = ?');
+      values.push(notify_enabled ? 1 : 0);
     }
     
     if (fields.length === 0) {
       throw new Error('No fields to update');
     }
     
-    fields.push(`updated_at = datetime('now', '+7 hours')`);
+    fields.push(`updated_at = datetime('now', '${LOCAL_MODIFIER}')`);
     values.push(uid);
     
     const stmt = this.db.prepare(`
@@ -161,7 +237,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO attendance 
       (transaction_id, user_id, user_name, whatsapp_number, attendance_time, mode, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     try {
@@ -201,7 +277,7 @@ class DatabaseService {
     let params = [];
     
     if (date) {
-      conditions.push("DATE(attendance_time, '+7 hours') = DATE(?, '+7 hours')");
+      conditions.push(`DATE(attendance_time, '${LOCAL_MODIFIER}') = DATE(?, '${LOCAL_MODIFIER}')`);
       params.push(date);
     }
     
@@ -241,8 +317,8 @@ class DatabaseService {
   getAttendanceStats(date) {
     // WIB (Asia/Jakarta, UTC+7, no DST) — normalize stored UTC to local day/hour.
     const dateFilter = date
-      ? "DATE(attendance_time, '+7 hours') = DATE(?, '+7 hours')"
-      : "DATE(attendance_time, '+7 hours') = DATE('now', '+7 hours')";
+      ? `DATE(attendance_time, '${LOCAL_MODIFIER}') = DATE(?, '${LOCAL_MODIFIER}')`
+      : `DATE(attendance_time, '${LOCAL_MODIFIER}') = DATE('now', '${LOCAL_MODIFIER}')`;
     const params = date ? [date] : [];
     
     const totalStmt = this.db.prepare(`
@@ -263,20 +339,20 @@ class DatabaseService {
     
     const hourlyStmt = this.db.prepare(`
       SELECT 
-        strftime('%H', attendance_time, '+7 hours') as hour,
+        strftime('%H', attendance_time, '${LOCAL_MODIFIER}') as hour,
         COUNT(*) as count
       FROM attendance 
       WHERE ${dateFilter}
-      GROUP BY strftime('%H', attendance_time, '+7 hours')
+      GROUP BY strftime('%H', attendance_time, '${LOCAL_MODIFIER}')
       ORDER BY hour
     `);
     
     // Binning per 10 menit (WIB) + dipisah per mode (Masuk/Pulang).
     const tenMinStmt = this.db.prepare(`
       SELECT 
-        (strftime('%H', attendance_time, '+7 hours') ||
+        (strftime('%H', attendance_time, '${LOCAL_MODIFIER}') ||
          ':' ||
-         printf('%02d', (CAST(strftime('%M', attendance_time, '+7 hours') AS INTEGER) / 10) * 10)) AS bucket,
+         printf('%02d', (CAST(strftime('%M', attendance_time, '${LOCAL_MODIFIER}') AS INTEGER) / 10) * 10)) AS bucket,
         mode,
         COUNT(*) AS count
       FROM attendance 
@@ -307,7 +383,7 @@ class DatabaseService {
   markAsSent(transactionId) {
     const stmt = this.db.prepare(`
       UPDATE attendance 
-      SET status = 'sent', sent_at = datetime('now', '+7 hours') 
+      SET status = 'sent', sent_at = datetime('now', '${LOCAL_MODIFIER}') 
       WHERE transaction_id = ?
     `);
     
@@ -333,6 +409,53 @@ class DatabaseService {
     
     return { success: true, changes: result.changes };
   }
+
+  // Ubah status pengiriman beberapa absen sekaligus (bulk action di History).
+  // Mode 1: `ids` (array id baris tertentu). Mode 2: `filter` (object
+  // {date,userId,status}) — berlaku untuk SEMUA baris yang cocok, termasuk
+  // di luar halaman pagination. Status sent mengisi sent_at, pending mengosongkannya.
+  bulkSetAttendanceStatus({ ids, filter, status }) {
+    const allowed = ['sent', 'pending'];
+    if (!allowed.includes(status)) {
+      throw new Error(`Status "${status}" tidak didukung untuk bulk action`);
+    }
+
+    const setClause = status === 'sent'
+      ? `SET status = 'sent', sent_at = datetime('now', '${LOCAL_MODIFIER}')`
+      : `SET status = 'pending', sent_at = NULL`;
+    const setSentAt = status === 'sent';
+
+    let whereClause;
+    let params;
+    if (Array.isArray(ids) && ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(', ');
+      whereClause = `WHERE id IN (${placeholders})`;
+      params = ids;
+    } else if (filter && typeof filter === 'object') {
+      const conds = ['1=1'];
+      const fparams = [];
+      if (filter.date) {
+        conds.push(`DATE(attendance_time, '${LOCAL_MODIFIER}') = DATE(?, '${LOCAL_MODIFIER}')`);
+        fparams.push(filter.date);
+      }
+      if (filter.userId) {
+        conds.push('user_id = ?');
+        fparams.push(filter.userId);
+      }
+      if (filter.status) {
+        conds.push('status = ?');
+        fparams.push(filter.status);
+      }
+      whereClause = `WHERE ${conds.join(' AND ')}`;
+      params = fparams;
+    } else {
+      throw new Error('ids (array) atau filter wajib diisi');
+    }
+
+    const stmt = this.db.prepare(`UPDATE attendance ${setClause} ${whereClause}`);
+    const result = stmt.run(...params);
+    return { success: true, updated: result.changes };
+  }
   
   // Retry queue operations
   addToRetryQueue(data) {
@@ -341,7 +464,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO retry_queue 
       (whatsapp_number, message, transaction_id, max_attempts, next_retry_at, created_at)
-      VALUES (?, ?, ?, ?, datetime('now', '+7 hours', '+1 minutes'), datetime('now', '+7 hours'))
+      VALUES (?, ?, ?, ?, datetime('now', '${LOCAL_MODIFIER}', '+1 minutes'), datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     const result = stmt.run(whatsapp_number, message, transaction_id, max_attempts);
@@ -352,7 +475,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       SELECT * FROM retry_queue 
       WHERE status = 'pending' 
-      AND next_retry_at <= datetime('now', '+7 hours')
+      AND next_retry_at <= datetime('now', '${LOCAL_MODIFIER}')
       AND attempt < max_attempts
       ORDER BY created_at ASC
       LIMIT 100
@@ -366,8 +489,8 @@ class DatabaseService {
       UPDATE retry_queue 
       SET 
         attempt = attempt + 1,
-        next_retry_at = datetime('now', '+7 hours', '+' || ? || ' seconds'),
-        updated_at = datetime('now', '+7 hours')
+        next_retry_at = datetime('now', '${LOCAL_MODIFIER}', '+' || ? || ' seconds'),
+        updated_at = datetime('now', '${LOCAL_MODIFIER}')
       WHERE id = ?
     `);
     
@@ -378,7 +501,7 @@ class DatabaseService {
   markRetryAsSent(id) {
     const stmt = this.db.prepare(`
       UPDATE retry_queue 
-      SET status = 'sent', updated_at = datetime('now', '+7 hours')
+      SET status = 'sent', updated_at = datetime('now', '${LOCAL_MODIFIER}')
       WHERE id = ?
     `);
     
@@ -389,7 +512,7 @@ class DatabaseService {
   markRetryAsFailed(id) {
     const stmt = this.db.prepare(`
       UPDATE retry_queue 
-      SET status = 'failed', updated_at = datetime('now', '+7 hours')
+      SET status = 'failed', updated_at = datetime('now', '${LOCAL_MODIFIER}')
       WHERE id = ?
     `);
     
@@ -413,7 +536,7 @@ class DatabaseService {
     
     const stmt = this.db.prepare(`
       INSERT INTO templates (name, content, variables, created_at, updated_at)
-      VALUES (?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
+      VALUES (?, ?, ?, datetime('now', '${LOCAL_MODIFIER}'), datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     try {
@@ -453,7 +576,7 @@ class DatabaseService {
       throw new Error('No fields to update');
     }
     
-    fields.push(`updated_at = datetime('now', '+7 hours')`);
+    fields.push(`updated_at = datetime('now', '${LOCAL_MODIFIER}')`);
     values.push(id);
     
     const stmt = this.db.prepare(`
@@ -492,7 +615,7 @@ class DatabaseService {
   setSetting(key, value) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES (?, ?, datetime('now', '+7 hours'))
+      VALUES (?, ?, datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     const result = stmt.run(key, value);
@@ -503,7 +626,7 @@ class DatabaseService {
   logDeviceStatus(ip, status, message = null) {
     const stmt = this.db.prepare(`
       INSERT INTO device_logs (device_ip, status, message, created_at)
-      VALUES (?, ?, ?, datetime('now', '+7 hours'))
+      VALUES (?, ?, ?, datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     const result = stmt.run(ip, status, message);
@@ -563,7 +686,7 @@ class DatabaseService {
     const stmt = this.db.prepare(`
       INSERT INTO polling_schedules 
       (day_of_week, days, start_time, end_time, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
+      VALUES (?, ?, ?, ?, ?, datetime('now', '${LOCAL_MODIFIER}'), datetime('now', '${LOCAL_MODIFIER}'))
     `);
     
     const result = stmt.run(
@@ -604,7 +727,7 @@ class DatabaseService {
       throw new Error('No fields to update');
     }
     
-    fields.push(`updated_at = datetime('now', '+7 hours')`);
+    fields.push(`updated_at = datetime('now', '${LOCAL_MODIFIER}')`);
     values.push(id);
     
     const stmt = this.db.prepare(`
@@ -635,7 +758,7 @@ class DatabaseService {
   // Hapus log device yang lebih tua dari `days` hari (jadwal harian).
   cleanupOldDeviceLogs(days = 30) {
     const stmt = this.db.prepare(
-      "DELETE FROM device_logs WHERE created_at < datetime('now', '-' || ? || ' days')"
+      `DELETE FROM device_logs WHERE created_at < datetime('now', '${LOCAL_MODIFIER}', '-' || ? || ' days')`
     );
     const result = stmt.run(parseInt(days) || 30);
     return { deleted: result.changes };

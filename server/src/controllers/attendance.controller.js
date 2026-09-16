@@ -200,6 +200,58 @@ class AttendanceController {
       next(error);
     }
   }
+
+  // Bulk ubah status pengiriman beberapa absen (History: tandai terkirim / belum).
+  async bulkSetStatus(req, res, next) {
+    try {
+      const { ids, filter, status } = req.body;
+      
+      if (!['sent', 'pending'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          error: `Status "${status}" tidak didukung. Gunakan sent atau pending`
+        });
+      }
+
+      let payload = { status };
+
+      if (Array.isArray(ids) && ids.length > 0) {
+        const numIds = ids.map((i) => parseInt(i, 10)).filter((n) => Number.isInteger(n));
+        if (numIds.length === 0) {
+          return res.status(400).json({ success: false, error: 'ids tidak valid' });
+        }
+        payload.ids = numIds;
+      } else if (filter && typeof filter === 'object') {
+        payload.filter = {
+          date: filter.date || undefined,
+          userId: filter.userId || undefined,
+          status: filter.status || undefined
+        };
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'ids wajib berupa array atau berikan filter untuk update seluruh halaman'
+        });
+      }
+      
+      const result = database.bulkSetAttendanceStatus(payload);
+      
+      logger.info(`Bulk status attendance: ${status} (${result.updated} record)`, {
+        count: result.updated,
+        mode: payload.ids ? 'ids' : 'filter'
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          updated: result.updated,
+          status
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new AttendanceController();
