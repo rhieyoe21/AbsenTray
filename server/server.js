@@ -13,6 +13,17 @@ const logger = require('./src/utils/logger');
 const errorHandler = require('./src/middleware/errorHandler');
 const schedulerService = require('./src/services/scheduler.service');
 
+// Node.js kills the process on an unhandled rejection by default. node-zklib
+// creates fire-and-forget promises on socket events, so a transient device
+// error could otherwise take the whole service down (and with it the polling
+// loop). Log and keep running instead.
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection', { error: reason && (reason.message || String(reason)) });
+});
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception', { error: error && (error.message || String(error)), stack: error && error.stack });
+});
+
 // Support: single origin, comma-separated list, or '*' (allow all).
 function resolveCorsOrigin(raw) {
   if (!raw) return false;

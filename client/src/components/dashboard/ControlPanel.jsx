@@ -118,7 +118,11 @@ export default function ControlPanel() {
       const result = await settingsAPI.reconnect()
       setRefreshResult(result?.data)
       queryClient.invalidateQueries(['settings'])
-      toast.success('Koneksi diperbarui')
+      if (result?.data?.fingerprint?.success) {
+        toast.success('Koneksi diperbarui')
+      } else {
+        toast.error(result?.data?.fingerprint?.error || 'Gagal memperbarui koneksi')
+      }
     } catch (err) {
       toast.error('Perbarui gagal')
       setRefreshResult({ error: err.message })
@@ -136,7 +140,11 @@ export default function ControlPanel() {
       if (deviceOffline) {
         const result = await settingsAPI.reconnect()
         setRefreshResult(result?.data)
-        toast.success('Perangkat terhubung kembali')
+        if (result?.data?.fingerprint?.success) {
+          toast.success('Perangkat terhubung kembali')
+        } else {
+          toast.error(result?.data?.fingerprint?.error || 'Gagal menghubungkan perangkat')
+        }
       } else {
         await settingsAPI.disconnectFingerprint()
         toast.success('Koneksi perangkat diputus')

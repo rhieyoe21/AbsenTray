@@ -63,6 +63,11 @@ class FingerprintService extends EventEmitter {
     this.manualDisconnected = false; // Manual disconnect pauses polling until reconnect
     this.transportPref = {}; // device_ip -> 'tcp' | 'udp' (preferred transport)
     this.readFailStreak = {}; // device_ip -> consecutive failed log reads
+    this.lastLogCount = {}; // device_ip -> last known device log count
+    this.hasSynced = {}; // device_ip -> true after a full successful read
+    this.lastFullReadAt = {}; // device_ip -> timestamp of last full read
+    this._polling = false; // true while a poll pass is running
+    this._deviceLock = Promise.resolve(); // serializes connect/disconnect calls
     
     // Queue pending logs in memory (processed by scheduler)
     this.pendingLogs = [];
@@ -85,6 +90,12 @@ class FingerprintService extends EventEmitter {
         }
       }
       logger.info('Fingerprint polling disabled — device connection dropped');
+    } else {
+      // Re-enabling polling clears any manual pause so the loop reconnects
+      // without needing the user to press "Hubungkan" again.
+      this.manualDisconnected = false;
+      // Kick off an immediate pass instead of waiting for the next interval.
+      this.pollDevice(this._callback).catch((e) => logger.error('Initial poll after enable failed', { error: errMsg(e) }));
     }
     
     this.emit('polling:toggled', this.pollingEnabled);
@@ -129,14 +140,42 @@ class FingerprintService extends EventEmitter {
     }
   }
 
+  // Serialize connect/disconnect so two callers (polling, health check, manual
+  // reconnect) can never open overlapping sessions — the device only accepts ONE.
+  _withDeviceLock(task) {
+    const run = this._deviceLock.then(task, task);
+    this._deviceLock = run.then(() => {}, () => {});
+    return run;
+  }
+
+  // Wait until any in-flight poll pass finishes. Returns true when idle.
+  async _waitForIdle(timeoutMs = 25000) {
+    const deadline = Date.now() + timeoutMs;
+    while (this._polling && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return !this._polling;
+  }
+
+  isPolling() {
+    return !!this._polling;
+  }
+
   // Force an immediate single polling pass (used by "Refresh Connection" and manual checks).
   async refreshConnection(callback) {
     logger.info('Manual refresh requested');
     
-    // Wait for / skip if an automatic poll is mid-flight (avoid double session).
-    if (this._polling) {
-      logger.warn('Manual refresh skipped — polling in progress');
-      return { success: false, error: 'Polling sedang berjalan, coba beberapa detik lagi' };
+    // A poll pass can take tens of seconds (it paginates every stored record).
+    // Waiting for it is far friendlier than refusing the manual reconnect —
+    // refusing here was the reason "Perbarui koneksi"/"Hubungkan" felt broken.
+    const idle = await this._waitForIdle(25000);
+    if (!idle) {
+      logger.warn('Manual refresh — previous poll still running, forcing a clean reconnect');
+      // Tear the old socket down; the in-flight read will fail fast and the
+      // next poll cycle will rebuild the session from scratch.
+      for (const ip of [...this.connections.keys()]) {
+        await this.disconnect(ip).catch(() => {});
+      }
     }
     
     this.lastPollTime = new Date();
@@ -174,9 +213,9 @@ class FingerprintService extends EventEmitter {
       
       return { success: true, logsFound: logs.length, processed };
     } catch (error) {
-      logger.error('Manual refresh failed', { error: error.message });
-      this.emit('device:error', { error: error.message });
-      return { success: false, error: error.message };
+      logger.error('Manual refresh failed', { error: errMsg(error) });
+      this.emit('device:error', { error: errMsg(error) });
+      return { success: false, error: errMsg(error) };
     }
   }
 
@@ -194,13 +233,17 @@ class FingerprintService extends EventEmitter {
   }
 
   async connect(device = this.devices[0]) {
+    return this._withDeviceLock(() => this._connectInternal(device));
+  }
+
+  async _connectInternal(device = this.devices[0]) {
     const { ip, port, timeout } = device;
     
     try {
       // Never stack multiple sessions to the same device — tear down any
       // previous connector/handle for this IP first.
       if (this.connections.has(ip)) {
-        await this.disconnect(ip).catch(() => {});
+        await this._disconnectInternal(ip).catch(() => {});
       }
       
       logger.info(`Connecting to fingerprint device ${ip}:${port}...`);
@@ -214,6 +257,9 @@ class FingerprintService extends EventEmitter {
       
       this.connections.set(ip, zk);
       this.deviceOnline = true;
+      // Force a full read after every (re)connect so nothing punched while the
+      // device was unreachable is missed.
+      this.hasSynced[ip] = false;
       
       const info = await zk.getInfo();
       logger.info(`Connected to device ${ip}`, {
@@ -254,6 +300,10 @@ class FingerprintService extends EventEmitter {
   }
 
   async disconnect(ip) {
+    return this._withDeviceLock(() => this._disconnectInternal(ip));
+  }
+
+  async _disconnectInternal(ip) {
     try {
       const conn = this.connections.get(ip);
       if (conn) {
@@ -340,11 +390,39 @@ class FingerprintService extends EventEmitter {
       
       const isUdp = this.transportPref[ip] === 'udp';
       try {
+        // Cheap change detection: getInfo returns the device's stored log count.
+        // If it hasn't changed since the last full sync, skip pulling the whole
+        // (potentially thousands of) records — repeated heavy reads are a common
+        // cause of the device resetting the socket mid-poll.
+        let currentCount = null;
+        try {
+          const info = await conn.getInfo();
+          if (info && typeof info.logCounts === 'number') currentCount = info.logCounts;
+        } catch (e) {
+          currentCount = null; // can't read count → do a normal full read
+        }
+
+        const recentlySynced = this.lastFullReadAt[ip] &&
+          (Date.now() - this.lastFullReadAt[ip]) < 120000;
+        if (currentCount !== null && this.hasSynced[ip] && recentlySynced &&
+            this.lastLogCount[ip] === currentCount) {
+          this.readFailStreak[ip] = 0;
+          logger.debug(`No new logs on ${ip} (count ${currentCount}) — skipping full read`);
+          continue;
+        }
+
         logger.info(`Fetching attendance logs from ${ip} (${isUdp ? 'udp' : 'tcp'})...`);
         const logs = await this._readWithDisable(conn);
         
         // read OK → reset fail streak, keep transport preference
         this.readFailStreak[ip] = 0;
+        if (currentCount !== null) {
+          this.lastLogCount[ip] = currentCount;
+          this.hasSynced[ip] = true;
+        } else {
+          this.hasSynced[ip] = false;
+        }
+        this.lastFullReadAt[ip] = Date.now();
         
         if (logs && logs.data && logs.data.length > 0) {
           logger.info(`Found ${logs.data.length} attendance logs from ${ip}`);
@@ -382,6 +460,8 @@ class FingerprintService extends EventEmitter {
             this.deviceOnline = true;
             this.transportPref[ip] = 'udp';
             this.readFailStreak[ip] = 0;
+            // New socket → force a full verification read next cycle.
+            this.hasSynced[ip] = false;
             udpOk = true;
             
             if (udpLogs && udpLogs.data && udpLogs.data.length > 0) {
@@ -455,22 +535,41 @@ class FingerprintService extends EventEmitter {
     }
   }
 
+  // Health check. NON-DESTRUCTIVE: it must never disconnect the live session
+  // that the poller relies on (doing so was making the device appear to drop
+  // by itself every health-check interval).
   async checkConnection() {
-    try {
-      const device = this.devices[0];
-      const result = await this.connect(device);
-      
-      if (result) {
-        // Disconnect after check to free device
-        await this.disconnect(device.ip);
+    const device = this.devices[0];
+    const ip = device.ip;
+
+    // Don't interleave with an in-flight poll — report the last known state.
+    if (this.isPolling()) {
+      return this.deviceOnline;
+    }
+
+    const conn = this.connections.get(ip);
+    if (conn) {
+      // A live session exists → probe it in place and keep it open.
+      try {
+        await conn.getInfo();
+        this.deviceOnline = true;
+        this.lastConnectionState = true;
         return true;
+      } catch (error) {
+        logger.warn(`Health check on live connection failed for ${ip} — reconnecting`, { error: errMsg(error) });
+        await this.disconnect(ip).catch(() => {});
       }
-      
-      return false;
-    } catch (error) {
-      logger.error('Connection check failed', { error: error.message });
+    }
+
+    // Polling intentionally paused → do NOT reopen a session on our own.
+    if (this.manualDisconnected || !this.pollingEnabled) {
+      this.deviceOnline = false;
       return false;
     }
+
+    // No live session → establish one and keep it for the next poll.
+    const result = await this.connect(device);
+    return !!result;
   }
 
   async getRealTimeLogs(callback) {

@@ -354,11 +354,24 @@ class SchedulerService extends EventEmitter {
   async runDeviceHealthCheck() {
     this.lastDeviceCheck = new Date();
     
+    // Polling sengaja dijeda (nonaktif / diputus manual) → jangan ganggu
+    // perangkat dan jangan kirim alert offline palsu.
+    if (!fingerprintService.pollingEnabled || fingerprintService.manualDisconnected) {
+      logger.debug('Device health check skipped — polling paused');
+      return null;
+    }
+    
+    // Jangan jalankan cek saat poll sedang berjalan (menghindari sesi ganda).
+    if (fingerprintService.isPolling()) {
+      logger.debug('Device health check skipped — poll in progress');
+      return null;
+    }
+    
     logger.debug('Running device health check');
     
     const isOnline = await fingerprintService.checkConnection();
     
-    if (!isOnline) {
+    if (isOnline === false) {
       logger.warn('Device health check failed - device offline');
       this.emit('device:offline', {
         ip: config.fingerprint.ip,
@@ -367,7 +380,7 @@ class SchedulerService extends EventEmitter {
     } else {
       logger.debug('Device health check passed - device online');
     }
-    return isOnline;
+    return isOnline === true;
   }
 
   startDeviceHealthCheck() {
