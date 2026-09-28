@@ -66,8 +66,16 @@ async handleDeviceOffline(data) {
   }
 
   async handleDeviceRecovery(ip) {
+    // A successful first connection after process startup is not a recovery
+    // from an outage. Only notify when an offline alert was sent previously.
+    const recoveredFromAlertedOutage = this.offlineNotified;
     // Reset episode flag FIRST so the next outage can produce a fresh alert.
     this.offlineNotified = false;
+
+    if (!recoveredFromAlertedOutage) {
+      logger.info('Device connected at startup - skipping recovery alert');
+      return { success: false, skipped: true };
+    }
     
     if (!this.isEnabled()) {
       logger.info('Admin alerts disabled - skipping device recovery alert');
