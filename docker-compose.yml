@@ -22,8 +22,10 @@ services:
     image: absentray:local
     container_name: absentray
     restart: unless-stopped
-    ports:
-      - "5000:5000"
+    # ZKTeco device accepts the host LAN source, but resets connections from
+    # Docker bridge/NAT. Host networking keeps the container on the same LAN
+    # interface as the server. Supported on Linux/CasaOS deployments.
+    network_mode: host
     environment:
       - NODE_ENV=production
       - SERVE_CLIENT=1
