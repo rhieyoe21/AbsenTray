@@ -26,7 +26,9 @@ function forceDestroySocket(conn) {
     conn.udpSocket,
     conn.udp_socket,
     conn.client,
-    conn._this && conn._this.socket
+    conn._this && conn._this.socket,
+    conn.zklibTcp && conn.zklibTcp.socket,
+    conn.zklibUdp && conn.zklibUdp.socket
   ];
   for (const s of candidates) {
     if (!s) continue;
@@ -236,6 +238,22 @@ class FingerprintService extends EventEmitter {
     return this._withDeviceLock(() => this._connectInternal(device));
   }
 
+  // node-zklib's public createSocket() always starts with TCP and only falls
+  // back to UDP for ECONNREFUSED. Use its transport implementations directly
+  // so a TCP timeout/reset can still be retried over UDP.
+  async _createTransportConnection(device, protocol, timeout) {
+    const zk = new ZKLib(device.ip, device.port, timeout, 4000);
+    if (protocol === 'udp') {
+      await zk.zklibUdp.createSocket();
+      await zk.zklibUdp.connect();
+    } else {
+      await zk.zklibTcp.createSocket();
+      await zk.zklibTcp.connect();
+    }
+    zk.connectionType = protocol;
+    return zk;
+  }
+
   async _connectInternal(device = this.devices[0]) {
     const { ip, port, timeout } = device;
     let lastError = null;
@@ -260,8 +278,7 @@ class FingerprintService extends EventEmitter {
         for (let attempt = 1; attempt <= 2; attempt++) {
           let zk = null;
           try {
-            zk = new ZKLib(ip, port, requestTimeout, 4000, 0, protocol);
-            await zk.createSocket();
+            zk = await this._createTransportConnection({ ip, port }, protocol, requestTimeout);
             const info = await zk.getInfo();
 
             // Store only a fully handshaken connection. A socket that was
@@ -471,8 +488,10 @@ class FingerprintService extends EventEmitter {
             await this.disconnect(ip).catch(() => {});
             
             const timeout = Math.max(config.fingerprint.timeout || 10000, 30000);
-            const udpConn = new ZKLib(config.fingerprint.ip, config.fingerprint.port, timeout, 4000, 0, 'udp');
-            await udpConn.createSocket();
+            const udpConn = await this._createTransportConnection({
+              ip: config.fingerprint.ip,
+              port: config.fingerprint.port
+            }, 'udp', timeout);
             
             const udpLogs = await this._readWithDisable(udpConn);
             this.connections.set(ip, udpConn);
