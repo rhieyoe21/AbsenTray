@@ -17,7 +17,7 @@ RUN npm ci --omit=dev
 # ---------- Stage 3: runtime ----------
 FROM node:20-slim
 ENV NODE_ENV=production \
-    PORT=5000 \
+    PORT=105 \
     SERVE_CLIENT=1 \
     DB_PATH=./data/attendance.db \
     LOG_FILE=./logs/app.log
@@ -40,9 +40,9 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # Volume untuk data persisten
 VOLUME ["/app/server/data", "/app/server/logs", "/app/server/backups"]
 
-EXPOSE 5000
+EXPOSE 105
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:5000/health || exit 1
+  CMD wget -qO- http://127.0.0.1:105/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -5,7 +5,7 @@ statis + WebSocket) di Ubuntu yang memakai **CasaOS**. Cocok untuk Home Server
 atau server lokal kantor.
 
 ```
-Akses      →  http://<SERVER_IP>:5000   (dashboard + API satu port)
+Akses      →  http://<SERVER_IP>:105    (dashboard + API satu port)
 Device FP  →  <FP_IP>:4370
 WAHA API   →  http://<SERVER_IP>:5555
 ```
@@ -109,14 +109,14 @@ docker logs -f absentray             # inisialisasi + log server
 
 ```bash
 # Health endpoint
-curl -s http://localhost:5000/health
+curl -s http://localhost:105/health
 # {"status":"ok","version":"1.0.0","serveClient":true}
 
 # User terimpor?
-curl -s http://localhost:5000/api/users | head -c 400
+curl -s http://localhost:105/api/users | head -c 400
 ```
 
-Di browser → `http://<SERVER_IP>:5000`:
+Di browser → `http://<SERVER_IP>:105`:
 
 1. **Ringkasan** → baris *Perangkat fingerprint* & *WhatsApp API* hijau
    (atau tekan **Perbarui/Hubungkan**).
@@ -159,7 +159,7 @@ crontab -e
 
 | Gejala | Solusi |
 |---|---|
-| `port is already allocated` | Ubah `ports` di compose (`"5001:5000"`) atau hentikan app lain |
+| `port is already allocated` | Pastikan port `105` tidak dipakai aplikasi lain |
 | Container restart loop | `docker logs absentray`; cek `better-sqlite3` tersegmen (native) — base `node:20-slim` menyediakan prebuild |
 | Device merah | `ping <FP_IP>`; pastikan tak ada software lain mengunci `:4370` |
 | WAHA merah | `curl http://<SERVER_IP>:5555/health`; sesi `default` discan QR |
