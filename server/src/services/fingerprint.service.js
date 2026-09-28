@@ -242,7 +242,9 @@ class FingerprintService extends EventEmitter {
   // back to UDP for ECONNREFUSED. Use its transport implementations directly
   // so a TCP timeout/reset can still be retried over UDP.
   async _createTransportConnection(device, protocol, timeout) {
-    const zk = new ZKLib(device.ip, device.port, timeout, 4000);
+    // Port 4000 is commonly left occupied by a previous UDP socket. Port 0
+    // lets the OS choose a free local source port and avoids retry collisions.
+    const zk = new ZKLib(device.ip, device.port, timeout, 0);
     if (protocol === 'udp') {
       await zk.zklibUdp.createSocket();
       await zk.zklibUdp.connect();
