@@ -238,7 +238,8 @@ class FingerprintService extends EventEmitter {
 
   async _connectInternal(device = this.devices[0]) {
     const { ip, port, timeout } = device;
-    
+    let lastError = null;
+
     try {
       // Never stack multiple sessions to the same device — tear down any
       // previous connector/handle for this IP first.
@@ -247,51 +248,69 @@ class FingerprintService extends EventEmitter {
       }
       
       logger.info(`Connecting to fingerprint device ${ip}:${port}...`);
-      
-      // Per-request timeout: use configured value but floor at 30s — reading
-      // many attendance records can legitimately take longer than 10s.
-      const requestTimeout = Math.max(timeout || 10000, 30000);
-      const zk = new ZKLib(ip, port, requestTimeout, 4000, 0, 'tcp');
-      await zk.createSocket();
-      logger.info(`Connection ready ${ip}:${port} (request timeout ${requestTimeout}ms)`);
-      
-      this.connections.set(ip, zk);
-      this.deviceOnline = true;
-      // Force a full read after every (re)connect so nothing punched while the
-      // device was unreachable is missed.
-      this.hasSynced[ip] = false;
-      
-      const info = await zk.getInfo();
-      logger.info(`Connected to device ${ip}`, {
-        userCounts: info.userCounts,
-        logCounts: info.logCounts,
-        logCapacity: info.logCapacity
-      });
-      
-      this.emit('connection:established', { ip, ...info });
-      
-      // Update device status in DB
-      database.logDeviceStatus(ip, 'online', 'Device connected successfully');
-      
-      if (!this.lastConnectionState) {
-        this.emit('device:recovered', ip);
+
+      // A reachable IP does not guarantee that the device accepts TCP. Some
+      // ZKTeco firmware responds more reliably over UDP, so retry both
+      // transports before declaring the device offline.
+      const preferred = this.transportPref[ip] || 'tcp';
+      const transports = [preferred, preferred === 'tcp' ? 'udp' : 'tcp'];
+      const requestTimeout = Math.max(timeout || 10000, 15000);
+
+      for (const protocol of transports) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          let zk = null;
+          try {
+            zk = new ZKLib(ip, port, requestTimeout, 4000, 0, protocol);
+            await zk.createSocket();
+            const info = await zk.getInfo();
+
+            // Store only a fully handshaken connection. A socket that was
+            // created but failed getInfo() must never be reused by polling.
+            this.connections.set(ip, zk);
+            this.transportPref[ip] = protocol;
+            this.deviceOnline = true;
+            this.hasSynced[ip] = false;
+            logger.info(`Connection ready ${ip}:${port} (${protocol}, attempt ${attempt})`);
+            logger.info(`Connected to device ${ip}`, {
+              userCounts: info.userCounts,
+              logCounts: info.logCounts,
+              logCapacity: info.logCapacity
+            });
+            this.emit('connection:established', { ip, protocol, ...info });
+            database.logDeviceStatus(ip, 'online', `Device connected successfully via ${protocol}`);
+            if (!this.lastConnectionState) this.emit('device:recovered', ip);
+            this.lastConnectionState = true;
+            return { zk, info };
+          } catch (error) {
+            lastError = error;
+            if (zk) {
+              try { await zk.disconnect(); } catch (e) { /* best effort */ }
+              forceDestroySocket(zk);
+            }
+            if (attempt < 2) {
+              await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+            }
+            logger.warn(`Fingerprint ${protocol} connection attempt failed`, {
+              ip, attempt, error: errMsg(error)
+            });
+          }
+        }
       }
-      this.lastConnectionState = true;
-      
-      return { zk, info };
+
+      throw lastError || new Error('No fingerprint transport succeeded');
     } catch (error) {
       logger.error(`Failed to connect to fingerprint device ${ip}:${port}`, {
-        error: error.message,
+        error: errMsg(error),
         code: error.code
       });
       
       this.deviceOnline = false;
       
-      database.logDeviceStatus(ip, 'offline', error.message);
+      database.logDeviceStatus(ip, 'offline', errMsg(error));
       
       // Emit offline alert only if previously online
       if (this.lastConnectionState) {
-        this.emit('device:offline', { ip, error: error.message });
+        this.emit('device:offline', { ip, error: errMsg(error) });
       }
       this.lastConnectionState = false;
       
@@ -667,13 +686,9 @@ class FingerprintService extends EventEmitter {
     } catch (error) {
       logger.error('Polling error', { error: errMsg(error) });
       
-      // Network failure is a legitimate reason to close the socket.
-      if (this.connections.size > 0) {
-        for (const ip of this.connections.keys()) {
-          await this.disconnect(ip).catch(() => {});
-        }
-      }
-      
+      // getAttendanceLogs handles read failures and resets a stuck socket after
+      // several consecutive failures. Do not tear down a healthy session for a
+      // single transient error here; doing so caused avoidable disconnects.
       this.emit('device:error', { error: errMsg(error) });
     } finally {
       this._polling = false;

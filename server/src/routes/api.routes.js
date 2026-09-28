@@ -15,9 +15,14 @@ const usersController = require('../controllers/users.controller');
 const templatesController = require('../controllers/templates.controller');
 const dashboardController = require('../controllers/dashboard.controller');
 const settingsController = require('../controllers/settings.controller');
+const sseService = require('../services/sse.service');
 
 // Apply rate limiting to all API routes
 router.use(apiLimiter);
+
+// Long-lived event stream for dashboard data changes. GET endpoints remain
+// snapshot APIs; clients no longer need to poll them for updates.
+router.get('/events', (req, res) => sseService.addClient(req, res));
 
 // Attendance routes
 router.get('/attendance', attendanceController.getAttendance);

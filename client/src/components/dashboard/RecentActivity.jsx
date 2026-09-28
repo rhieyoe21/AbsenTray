@@ -31,8 +31,7 @@ const ModeBadge = ({ mode }) => {
 export default function RecentActivity({ limit = 10 }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['recent-activities', limit],
-    queryFn: () => dashboardAPI.getRecent(limit),
-    refetchInterval: 10000
+    queryFn: () => dashboardAPI.getRecent(limit)
   })
 
   if (isLoading) {

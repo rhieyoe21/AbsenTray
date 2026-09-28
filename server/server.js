@@ -12,6 +12,7 @@ const socketHandler = require('./src/sockets/socketHandler');
 const logger = require('./src/utils/logger');
 const errorHandler = require('./src/middleware/errorHandler');
 const schedulerService = require('./src/services/scheduler.service');
+const sseService = require('./src/services/sse.service');
 
 // Node.js kills the process on an unhandled rejection by default. node-zklib
 // creates fire-and-forget promises on socket events, so a transient device
@@ -114,18 +115,23 @@ socketHandler(io);
 // Wire scheduler events to WebSocket broadcasts
 schedulerService.on('attendance:new', (data) => {
   io.emit('attendance:new', data);
+  sseService.publish('attendance:new', data);
 });
 schedulerService.on('device:offline', (data) => {
   io.emit('device:offline', data);
+  sseService.publish('device:offline', data);
 });
 schedulerService.on('device:recovered', (data) => {
   io.emit('device:recovered', data);
+  sseService.publish('device:recovered', data);
 });
 schedulerService.on('retry:sent', (data) => {
   io.emit('retry:sent', data);
+  sseService.publish('retry:sent', data);
 });
 schedulerService.on('retry:exhausted', (data) => {
   io.emit('retry:exhausted', data);
+  sseService.publish('retry:exhausted', data);
 });
 
 // Start scheduled jobs (polling, retry, health checks)

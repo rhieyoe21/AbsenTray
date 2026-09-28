@@ -4,6 +4,7 @@ const whatsappService = require('../services/whatsapp.service');
 const alertService = require('../services/alert.service');
 const config = require('../config');
 const logger = require('../utils/logger');
+const sseService = require('../services/sse.service');
 
 class SettingsController {
   async getSettings(req, res, next) {
@@ -136,6 +137,7 @@ class SettingsController {
         success: true,
         message: 'Settings updated and applied'
       });
+      sseService.publish('settings:updated');
     } catch (error) {
       next(error);
     }
@@ -158,6 +160,7 @@ class SettingsController {
         success: true,
         data: { pollingEnabled: fingerprintService.pollingEnabled }
       });
+      sseService.publish('settings:updated');
     } catch (error) {
       next(error);
     }
@@ -180,6 +183,7 @@ class SettingsController {
         success: true,
         data: { scheduleEnabled: fingerprintService.scheduleEnabled }
       });
+      sseService.publish('settings:updated');
     } catch (error) {
       next(error);
     }

@@ -6,8 +6,7 @@ import { formatTimeOnly } from '../../utils/format'
 export default function DeviceStatus() {
   const { data, isLoading } = useQuery({
     queryKey: ['device-status'],
-    queryFn: () => dashboardAPI.getDeviceStatus(),
-    refetchInterval: 30000
+    queryFn: () => dashboardAPI.getDeviceStatus()
   })
 
   if (isLoading) {

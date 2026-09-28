@@ -12,8 +12,7 @@ export default function AttendanceChart() {
   
   const { data: chartData, isLoading } = useQuery({
     queryKey: ['attendance-chart'],
-    queryFn: () => dashboardAPI.getCharts(),
-    refetchInterval: 30000
+    queryFn: () => dashboardAPI.getCharts()
   })
 
   if (isLoading) {

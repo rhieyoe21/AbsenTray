@@ -12,8 +12,7 @@ export default function ControlPanel() {
 
   const { data: settingsData } = useQuery({
     queryKey: ['settings'],
-    queryFn: () => settingsAPI.get(),
-    refetchInterval: 30000
+    queryFn: () => settingsAPI.get()
   })
 
   const status = settingsData?.data?.status || {}

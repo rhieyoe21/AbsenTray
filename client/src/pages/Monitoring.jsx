@@ -11,14 +11,12 @@ export default function Monitoring() {
 
   const { data: retryQueue, isLoading } = useQuery({
     queryKey: ['retry-queue'],
-    queryFn: () => dashboardAPI.getRetryQueue(),
-    refetchInterval: 10000
+    queryFn: () => dashboardAPI.getRetryQueue()
   })
 
   const { data: deviceLogs } = useQuery({
     queryKey: ['device-logs'],
-    queryFn: () => dashboardAPI.getDeviceStatus(),
-    refetchInterval: 30000
+    queryFn: () => dashboardAPI.getDeviceStatus()
   })
 
   if (isLoading) return <LoadingSpinner />

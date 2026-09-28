@@ -86,8 +86,7 @@ export default function Dashboard() {
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
-    queryFn: () => dashboardAPI.getStats(),
-    refetchInterval: 30000
+    queryFn: () => dashboardAPI.getStats()
   })
 
   const handleDeviceAction = async () => {
