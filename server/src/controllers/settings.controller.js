@@ -2,6 +2,7 @@ const database = require('../services/database.service');
 const fingerprintService = require('../services/fingerprint.service');
 const whatsappService = require('../services/whatsapp.service');
 const alertService = require('../services/alert.service');
+const telegramService = require('../services/telegram.service');
 const config = require('../config');
 const logger = require('../utils/logger');
 const sseService = require('../services/sse.service');
@@ -37,7 +38,9 @@ class SettingsController {
           hasApiKey: !!config.waha.apiKey
         },
         admin: {
-          whatsapp: config.admin.whatsapp
+          whatsapp: config.admin.whatsapp,
+          telegramChatId: config.admin.telegramChatId,
+          hasTelegramToken: !!config.admin.telegramBotToken
         },
         retry: {
           maxAttempts: config.retry.maxAttempts
@@ -102,6 +105,14 @@ class SettingsController {
       
       // Apply admin config
       if (admin && admin.whatsapp) config.admin.whatsapp = admin.whatsapp;
+      if (admin?.telegram) {
+        if (admin.telegram.token && String(admin.telegram.token).trim()) {
+          config.admin.telegramBotToken = String(admin.telegram.token).trim();
+        }
+        if (admin.telegram.chatId !== undefined) {
+          config.admin.telegramChatId = String(admin.telegram.chatId).trim();
+        }
+      }
       
       // Apply retry config
       if (retry) {
@@ -308,6 +319,16 @@ class SettingsController {
         success: result.connected,
         data: result
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async testTelegramConnection(req, res, next) {
+    try {
+      logger.info('Testing Telegram bot connection...');
+      const result = await telegramService.testConnection();
+      res.json({ success: result.success, data: result });
     } catch (error) {
       next(error);
     }

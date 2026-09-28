@@ -9,7 +9,7 @@ const TABS = [
   { id: 'device', label: 'Perangkat' },
   { id: 'waha', label: 'WhatsApp' },
   { id: 'admin', label: 'Notifikasi Admin' },
-  { id: 'test', label: 'Test Whatsapp' }
+  { id: 'test', label: 'Test WhatsApp' }
 ]
 
 const Panel = ({ title, children }) => (
@@ -47,6 +47,7 @@ export default function Settings() {
   const [busyKey, setBusyKey] = useState(null)
   const [pingNumber, setPingNumber] = useState('')
   const [sendingPing, setSendingPing] = useState(false)
+  const [testingTelegram, setTestingTelegram] = useState(false)
 
   if (data && !form) {
     const d = data.data
@@ -59,7 +60,8 @@ export default function Settings() {
       waha_url: d.config?.waha?.url || '',
       waha_session: d.config?.waha?.session || 'default',
       waha_api_key: '',
-      admin_whatsapp: d.config?.admin?.whatsapp || '',
+      telegram_bot_token: '',
+      telegram_chat_id: d.config?.admin?.telegramChatId || '',
       max_retry: d.config?.retry?.maxAttempts || 3,
       admin_alerts_enabled: d.settings?.admin_alerts_enabled !== '0',
       waha_delay: d.settings?.waha_message_delay_ms || 2000,
@@ -105,7 +107,12 @@ export default function Settings() {
     setBusyKey('admin')
     try {
       await apply({
-        admin: { whatsapp: form.admin_whatsapp },
+        admin: {
+          telegram: {
+            ...(form.telegram_bot_token.trim() ? { token: form.telegram_bot_token.trim() } : {}),
+            chatId: form.telegram_chat_id.trim()
+          }
+        },
         retry: { maxAttempts: parseInt(form.max_retry) },
         settings: {
           waha_message_delay_ms: String(parseInt(form.waha_delay) || 0)
@@ -115,6 +122,20 @@ export default function Settings() {
       toast.success('Pengaturan admin disimpan')
     } catch (e) { toast.error(e.response?.data?.error?.message || 'Gagal simpan') }
     finally { setBusyKey(null) }
+  }
+
+  const testTelegram = async () => {
+    setTestingTelegram(true)
+    try {
+      const r = await settingsAPI.testTelegram()
+      if (r.success && r.data?.messageSent) toast.success('Pesan uji Telegram terkirim')
+      else if (r.success) toast.success('Token Telegram valid, tetapi chat ID belum diuji')
+      else toast.error(r.data?.error || 'Telegram bot tidak merespons')
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Gagal menguji Telegram bot')
+    } finally {
+      setTestingTelegram(false)
+    }
   }
 
   const toggleAdminAlerts = async (val) => {
@@ -211,16 +232,18 @@ export default function Settings() {
       )}
 
       {tab === 'admin' && (
-        <Panel title="Admin & pengiriman ulang">
+        <Panel title="Telegram admin & pengiriman ulang">
           <div className="space-y-3">
-            <Input label="Nomor WhatsApp admin" name="admin_whatsapp" value={form.admin_whatsapp} onChange={handleChange} placeholder="cth: 628XXXXXXXXXX" />
+            <Input label={`Token Telegram bot${data?.data?.config?.admin?.hasTelegramToken ? ' (tersimpan)' : ''}`} name="telegram_bot_token" value={form.telegram_bot_token} onChange={handleChange} type="password" placeholder={data?.data?.config?.admin?.hasTelegramToken ? 'Kosongkan jika tidak diubah' : 'Token dari @BotFather'} />
+            <Input label="Telegram user/chat ID" name="telegram_chat_id" value={form.telegram_chat_id} onChange={handleChange} placeholder="Contoh: 123456789 atau -100..." />
+            <p className="text-xs text-base-content/50">Kirim pesan ke bot terlebih dahulu, lalu ambil ID dari update Telegram atau gunakan bot seperti @userinfobot.</p>
             <Input label="Batas percobaan kirim ulang" name="max_retry" value={form.max_retry} onChange={handleChange} type="number" suffix="kali" />
             <Input label="Jeda antar pesan WhatsApp" name="waha_delay" value={form.waha_delay} onChange={handleChange} type="number" suffix="ms" />
             <div className="form-control pt-1">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium">Notifikasi ke admin</div>
-                  <p className="text-xs text-base-content/50">Alert perangkat offline, WhatsApp API down, dan kirim ulang gagal.</p>
+                  <p className="text-xs text-base-content/50">Alert perangkat offline, WhatsApp API down, dan kirim ulang gagal dikirim ke Telegram.</p>
                 </div>
                 <span className={`badge badge-sm ${form.admin_alerts_enabled ? 'badge-success' : 'badge-error'}`}>
                   {form.admin_alerts_enabled ? 'Aktif' : 'Nonaktif'}
@@ -231,6 +254,10 @@ export default function Settings() {
                   onChange={(e) => toggleAdminAlerts(e.target.checked)} />
               </div>
             </div>
+            <button className="btn btn-outline w-full" onClick={testTelegram} disabled={testingTelegram}>
+              {testingTelegram && <span className="loading loading-spinner loading-xs"></span>}
+              Uji Telegram bot
+            </button>
             <SaveButton onClick={saveAdmin} loading={busyKey === 'admin'} label="Simpan admin" />
           </div>
         </Panel>

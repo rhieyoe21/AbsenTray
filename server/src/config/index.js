@@ -50,7 +50,9 @@ const config = {
   },
   
   admin: {
-    whatsapp: process.env.ADMIN_WHATSAPP || '628XXXXXXXXXX'
+    whatsapp: process.env.ADMIN_WHATSAPP || '628XXXXXXXXXX',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+    telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
   },
   
   logging: {
@@ -99,6 +101,8 @@ function loadFromDatabase() {
     const wahaKey = row('waha_api_key');
     const wahaSession = row('waha_session');
     const adminWa = row('admin_whatsapp');
+    const telegramToken = row('telegram_bot_token');
+    const telegramChatId = row('telegram_chat_id');
     const maxRetry = row('max_retry_attempts');
     const retryDelays = row('retry_delays');
     
@@ -110,6 +114,8 @@ function loadFromDatabase() {
     if (wahaKey) config.waha.apiKey = wahaKey;
     if (wahaSession) config.waha.session = wahaSession;
     if (adminWa) config.admin.whatsapp = adminWa;
+    if (telegramToken) config.admin.telegramBotToken = telegramToken;
+    if (telegramChatId) config.admin.telegramChatId = telegramChatId;
     if (maxRetry) config.retry.maxAttempts = parseInt(maxRetry);
     if (retryDelays) config.retry.delays = retryDelays.split(',').map(Number);
     
@@ -138,6 +144,8 @@ function saveToDatabase(db) {
     ['waha_api_key', config.waha.apiKey],
     ['waha_session', config.waha.session],
     ['admin_whatsapp', config.admin.whatsapp],
+    ['telegram_bot_token', config.admin.telegramBotToken],
+    ['telegram_chat_id', config.admin.telegramChatId],
     ['max_retry_attempts', String(config.retry.maxAttempts)],
     ['retry_delays', config.retry.delays.join(',')]
   ];

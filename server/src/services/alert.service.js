@@ -1,6 +1,6 @@
 ﻿const config = require('../config');
 const logger = require('../utils/logger');
-const whatsappService = require('./whatsapp.service');
+const telegramService = require('./telegram.service');
 const database = require('./database.service');
 const helpers = require('../utils/helpers');
 
@@ -52,9 +52,9 @@ async handleDeviceOffline(data) {
       `Error: ${error || 'Koneksi gagal'}\n\n` +
       `Mohon periksa koneksi perangkat!`;
 
-    logger.warn(`Sending device offline alert to admin (${config.admin.whatsapp})`);
+    logger.warn(`Sending device offline alert to Telegram admin (${config.admin.telegramChatId || 'not configured'})`);
     
-    const result = await whatsappService.sendAlert(message);
+    const result = await telegramService.sendMessage(message);
     
     if (result.success) {
       logger.info('Device offline alert sent successfully');
@@ -81,9 +81,9 @@ async handleDeviceOffline(data) {
       `Waktu: ${formattedTime}\n\n` +
       `Perangkat berhasil terhubung kembali.`;
     
-    logger.info(`Sending device recovery alert to admin (${config.admin.whatsapp})`);
+    logger.info(`Sending device recovery alert to Telegram admin (${config.admin.telegramChatId || 'not configured'})`);
     
-    const result = await whatsappService.sendAlert(message);
+    const result = await telegramService.sendMessage(message);
     
     if (result.success) {
       logger.info('Device recovery alert sent successfully');
@@ -117,7 +117,7 @@ async handleDeviceOffline(data) {
     
     logger.warn('Sending WAHA offline alert to admin');
     
-    const result = await whatsappService.sendAlert(message);
+    const result = await telegramService.sendMessage(message);
     
     if (result.success) {
       logger.info('WAHA offline alert sent successfully');
@@ -142,7 +142,7 @@ async handleDeviceOffline(data) {
     
     logger.error('Sending retry exhausted alert to admin');
     
-    const result = await whatsappService.sendAlert(message);
+    const result = await telegramService.sendMessage(message);
     
     if (result.success) {
       logger.info('Retry exhausted alert sent successfully');
@@ -165,7 +165,7 @@ async handleDeviceOffline(data) {
       `Context: ${JSON.stringify(context)}\n\n` +
       `Mohon periksa log aplikasi untuk detail lebih lanjut.`;
     
-    const result = await whatsappService.sendAlert(message);
+    const result = await telegramService.sendMessage(message);
     
     return result;
   }

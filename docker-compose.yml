@@ -42,6 +42,8 @@ services:
       - WAHA_API_KEY=${WAHA_API_KEY:-}
       - WAHA_SESSION=${WAHA_SESSION:-default}
       - ADMIN_WHATSAPP=${ADMIN_WHATSAPP:-628XXXXXXXXXX}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       # CORS: '*' berarti izinkan akses dari IP/domain mana pun (disarankan utk
       # akses langsung. Ganti dgn origin spesifik jika perlu.
       - CLIENT_URL=${CLIENT_URL:-*}

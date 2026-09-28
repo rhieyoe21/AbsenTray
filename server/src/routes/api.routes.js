@@ -73,6 +73,7 @@ router.post('/settings/schedules', settingsController.createSchedule);
 router.put('/settings/schedules/:id', settingsController.updateSchedule);
 router.delete('/settings/schedules/:id', settingsController.deleteSchedule);
 router.post('/settings/test-waha', settingsController.testWahaConnection);
+router.post('/settings/test-telegram', settingsController.testTelegramConnection);
 router.post('/settings/test-fingerprint', settingsController.testFingerprintConnection);
 router.post('/settings/test-send', settingsController.sendTestMessage);
 

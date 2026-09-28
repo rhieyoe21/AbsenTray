@@ -100,6 +100,7 @@ export const settingsAPI = {
     remove: (id) => api.delete(`/settings/schedules/${id}`)
   },
   testWaha: () => api.post('/settings/test-waha'),
+  testTelegram: () => api.post('/settings/test-telegram'),
   testFingerprint: () => api.post('/settings/test-fingerprint'),
   testSend: (data) => api.post('/settings/test-send', data)
 };
