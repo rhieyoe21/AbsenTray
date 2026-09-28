@@ -440,8 +440,11 @@ class FingerprintService extends EventEmitter {
           currentCount = null; // can't read count → do a normal full read
         }
 
+        // Do not download thousands of records every few polling cycles when
+        // the device log count is unchanged. Keep an occasional full read as
+        // a safety net for devices that recycle logs at their capacity.
         const recentlySynced = this.lastFullReadAt[ip] &&
-          (Date.now() - this.lastFullReadAt[ip]) < 120000;
+          (Date.now() - this.lastFullReadAt[ip]) < 10 * 60 * 1000;
         if (currentCount !== null && this.hasSynced[ip] && recentlySynced &&
             this.lastLogCount[ip] === currentCount) {
           this.readFailStreak[ip] = 0;
@@ -688,7 +691,7 @@ class FingerprintService extends EventEmitter {
       const logs = await this.getAttendanceLogs();
       
       if (logs.length > 0) {
-        logger.info(`Polled ${logs.length} new attendance logs`);
+         logger.info(`Fetched ${logs.length} attendance logs for synchronization`);
         
         // Process each log
         for (const log of logs) {
